@@ -139,6 +139,10 @@ export function StorySection() {
       aria-label="The Dawat story: sealed handi, breaking the dum, ingredients and the plated biryani"
     >
       <div className="sticky top-0 h-[100svh] w-full overflow-hidden bg-smoke">
+        {/* The heavy 3D scene starts only after the intro, so the intro never stutters. */}
+        {!introDone ? (
+          <div className="absolute inset-0 bg-[radial-gradient(50%_40%_at_60%_60%,rgba(245,158,11,0.15),transparent)]" />
+        ) : (
         <Suspense fallback={<div className="absolute inset-0 bg-[radial-gradient(50%_40%_at_60%_60%,rgba(245,158,11,0.15),transparent)]" />}>
           <StoryCanvas
             tier={tier}
@@ -150,6 +154,7 @@ export function StorySection() {
             onIncline={onIncline}
           />
         </Suspense>
+        )}
         <div className="story-vignette pointer-events-none absolute inset-0" aria-hidden />
 
         {/* Chapter I — hero */}

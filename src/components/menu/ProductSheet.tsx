@@ -55,7 +55,8 @@ export function ProductSheet() {
 }
 
 function ProductBody({ item, onClose, onOpen }: { item: MenuItem; onClose: () => void; onOpen: (id: string) => void }) {
-  const [variant, setVariant] = useState(item.variants[0]?.id ?? '');
+  const [picked, setVariant] = useState(item.variants[0]?.id ?? '');
+  const variant = item.variants.some((v) => v.id === picked) ? picked : (item.variants[0]?.id ?? '');
   const [qty, setQty] = useState(1);
   const [note, setNote] = useState('');
   const addToOrder = useAddToOrder();
@@ -136,12 +137,13 @@ function ProductBody({ item, onClose, onOpen }: { item: MenuItem; onClose: () =>
               <button
                 type="button"
                 className="btn btn-gold flex-1"
+                disabled={item.soldOut}
                 onClick={() => {
                   addToOrder(item.id, variant, qty, note);
                   onClose();
                 }}
               >
-                <ShoppingBag size={18} aria-hidden /> Add to Order · <span className="font-num">{formatINR(price * qty)}</span>
+                <ShoppingBag size={18} aria-hidden /> {item.soldOut ? 'Sold out right now' : <>Add to Order · <span className="font-num">{formatINR(price * qty)}</span></>}
               </button>
             </div>
           </>

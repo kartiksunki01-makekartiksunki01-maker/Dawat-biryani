@@ -16,6 +16,106 @@ class SoundEngine {
   private noiseBuffer: AudioBuffer | null = null;
   private enabled = false;
   private volume = 0.6;
+  // background track (uploaded by the restaurant in the admin panel) — plain <audio>, no CORS needed
+  private track: HTMLAudioElement | null = null;
+  private trackUrl: string | null = null;
+  private fadeTimer: number | null = null;
+  private musicAllowed = true; // admin switch
+  private sfxAllowed = true; //   admin switch
+  private userMusic = true; //    visitor switch
+  private userSfx = true; //      visitor switch
+
+  /** Admin settings from the backend. */
+  configure(o: { musicUrl?: string | null; musicEnabled?: boolean; sfxEnabled?: boolean; defaultVolume?: number }) {
+    if (o.musicEnabled !== undefined) this.musicAllowed = o.musicEnabled;
+    if (o.sfxEnabled !== undefined) this.sfxAllowed = o.sfxEnabled;
+    if (o.musicUrl !== undefined && o.musicUrl !== this.trackUrl) {
+      this.disposeTrack();
+      this.trackUrl = o.musicUrl;
+    }
+    this.applyMusic();
+  }
+
+  /** Visitor preferences (saved on this device). */
+  setUserPrefs(o: { music: boolean; sfx: boolean }) {
+    this.userMusic = o.music;
+    this.userSfx = o.sfx;
+    this.applyMusic();
+  }
+
+  get hasUploadedTrack() {
+    return !!this.trackUrl;
+  }
+
+  private wantsMusic() {
+    return this.enabled && this.musicAllowed && this.userMusic;
+  }
+
+  private applyMusic() {
+    if (!this.ctx && !this.track) {
+      if (!this.enabled) return;
+    }
+    if (this.wantsMusic()) {
+      if (this.trackUrl) {
+        this.stopAmbience();
+        this.playTrack();
+      } else {
+        this.fadeTrack(0, true);
+        this.startAmbience();
+      }
+    } else {
+      this.fadeTrack(0, true);
+      this.stopAmbience();
+    }
+  }
+
+  private playTrack() {
+    if (!this.trackUrl) return;
+    if (!this.track) {
+      const a = new Audio();
+      a.src = this.trackUrl;
+      a.loop = true;
+      a.preload = 'auto';
+      a.volume = 0;
+      this.track = a;
+    }
+    const a = this.track;
+    a.play()
+      .then(() => this.fadeTrack(Math.min(1, this.volume * 0.85), false))
+      .catch(() => {
+        /* autoplay refused or file failed — fall back to the built-in ambience */
+        this.startAmbience();
+      });
+  }
+
+  private fadeTrack(target: number, pauseAtEnd: boolean) {
+    const a = this.track;
+    if (!a) return;
+    if (this.fadeTimer) window.clearInterval(this.fadeTimer);
+    const start = a.volume;
+    const steps = 16;
+    let i = 0;
+    this.fadeTimer = window.setInterval(() => {
+      i++;
+      a.volume = Math.max(0, Math.min(1, start + ((target - start) * i) / steps));
+      if (i >= steps) {
+        if (this.fadeTimer) window.clearInterval(this.fadeTimer);
+        this.fadeTimer = null;
+        if (pauseAtEnd && target === 0) a.pause();
+      }
+    }, 50);
+  }
+
+  private disposeTrack() {
+    if (this.fadeTimer) window.clearInterval(this.fadeTimer);
+    this.fadeTimer = null;
+    if (this.track) {
+      this.track.pause();
+      this.track.removeAttribute('src');
+      this.track.load();
+      this.track = null;
+    }
+  }
 
   private ensure() {
     if (this.ctx) return this.ctx;
@@ -73,6 +173,7 @@ class SoundEngine {
   setVolume(v: number) {
     this.volume = v;
     if (this.ctx && this.enabled) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.1);
+    if (this.track && this.wantsMusic() && !this.track.paused) this.fadeTrack(Math.min(1, v * 0.85), false);
   }
 
   async setEnabled(on: boolean) {
@@ -82,17 +183,21 @@ class SoundEngine {
       if (!ctx) return;
       if (ctx.state === 'suspended') await ctx.resume();
       this.master.gain.setTargetAtTime(this.volume, ctx.currentTime, 0.4);
-      this.startAmbience();
-    } else if (this.ctx) {
-      this.master.gain.setTargetAtTime(0, this.ctx.currentTime, 0.15);
-      window.setTimeout(() => {
-        if (!this.enabled) this.stopAmbience();
-      }, 900);
+      this.applyMusic();
+    } else {
+      this.fadeTrack(0, true);
+      if (this.ctx) {
+        this.master.gain.setTargetAtTime(0, this.ctx.currentTime, 0.15);
+        window.setTimeout(() => {
+          if (!this.enabled) this.stopAmbience();
+        }, 900);
+      }
     }
   }
 
   /* ── Ambience: a soft tanpura-like drone (Sa–Pa) with gentle plucks ── */
   private startAmbience() {
+    if (!this.ctx) return;
     const ctx = this.ctx;
     if (!ctx || this.droneNodes.length) return;
     const filter = ctx.createBiquadFilter();
@@ -187,7 +292,7 @@ class SoundEngine {
   }
 
   play(name: SfxName) {
-    if (!this.enabled) return;
+    if (!this.enabled || !this.sfxAllowed || !this.userSfx) return;
     const ctx = this.ensure();
     if (!ctx) return;
     const t = ctx.currentTime;

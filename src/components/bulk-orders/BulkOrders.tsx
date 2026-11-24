@@ -1,9 +1,9 @@
 import { motion } from 'framer-motion';
-import { CalendarClock, Clock3, Copy, Flame, Phone, Scale } from 'lucide-react';
-import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { CalendarClock, CheckCircle2, Clock3, Copy, Flame, Loader2, Phone, Scale } from 'lucide-react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { menu, restaurant } from '../../data/restaurant';
 import { useMenuVersion } from '../../data/menuSync';
-import { saveLead } from '../../lib/leads';
+import { ApiError, submitEnquiry } from '../../lib/api';
 import { useHost } from '../../stores/hostStore';
 import { useUI } from '../../stores/uiStore';
 import { hasWebGL } from '../../utils/device';
@@ -97,21 +97,36 @@ export function BulkOrders() {
   const valid = Object.values(errors).every((e) => !e) && !noticeWarning;
   const message = buildBulkMessage(form);
 
-  const submit = (e: FormEvent) => {
+  const [sending, setSending] = useState(false);
+  const [sent, setSent] = useState<{ id: string; at: string } | null>(null);
+  const [sendError, setSendError] = useState<ApiError | null>(null);
+  const sendingRef = useRef(false);
+
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     setTried(true);
-    if (!valid) return;
-    saveLead({
-      kind: 'bulk',
-      name: form.name,
-      phone: form.phone,
-      message,
-      payload: { kg: form.kg, variety: form.variety, eventType: form.eventType, date: form.date, time: form.time, mode: form.mode },
-    });
-    window.open(whatsappUrl(message), '_blank', 'noopener,noreferrer');
-    sound.play('chime');
-    say('sent');
-    showToast('Opening WhatsApp with your bulk-order enquiry…');
+    if (!valid || sendingRef.current) return;
+    sendingRef.current = true;
+    setSending(true);
+    setSendError(null);
+    try {
+      const res = await submitEnquiry({
+        kind: 'bulk',
+        name: form.name.trim(),
+        phone: form.phone.trim(),
+        message,
+        payload: { kg: form.kg, variety: form.variety, eventType: form.eventType, date: form.date, time: form.time, mode: form.mode, instructions: form.instructions.trim() },
+      });
+      setSent({ id: res.id, at: res.created_at });
+      sound.play('chime');
+      say('enquiry_sent');
+      showToast('Bulk enquiry received by the restaurant.');
+    } catch (err) {
+      setSendError(err instanceof ApiError ? err : new ApiError('network', 'Could not send the enquiry.'));
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
+    }
   };
 
   const copy = async () => {
@@ -286,14 +301,34 @@ export function BulkOrders() {
 
               <label className="mt-5 flex cursor-pointer items-start gap-3 text-xs text-ivory/70">
                 <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-[#D4AF37]" />
-                <span>I agree to share these details with {restaurant.name} on WhatsApp so they can send me a quotation.</span>
+                <span>I agree to share these details with {restaurant.name} so they can contact me with a quotation.</span>
               </label>
               {tried && errors.consent && <span className="mt-1 block text-xs text-red-300">{errors.consent}</span>}
 
               <div className="mt-6 grid gap-2">
-                <button type="submit" className="btn btn-gold w-full shimmer">
-                  <WhatsAppIcon /> Enquire Now
-                </button>
+                {sent ? (
+                  <div role="status" className="space-y-3 rounded-2xl bg-emerald-500/10 p-4 text-sm text-ivory ring-1 ring-emerald-400/40">
+                    <p className="flex items-center gap-2 font-semibold text-emerald-200"><CheckCircle2 size={18} /> Enquiry received by the restaurant</p>
+                    <p className="text-xs text-ivory/75">Reference {sent.id.slice(0, 8).toUpperCase()}. {restaurant.name} will contact you on {form.phone} with a quotation. No price is confirmed until they reply.</p>
+                    <a className="btn btn-emerald btn-sm w-full" href={whatsappUrl(message)} target="_blank" rel="noopener noreferrer">
+                      <WhatsAppIcon /> Also send on WhatsApp (optional)
+                    </a>
+                    <button type="button" className="btn btn-ghost btn-sm w-full" onClick={() => { setSent(null); setTried(false); setConsent(false); }}>
+                      Send another enquiry
+                    </button>
+                  </div>
+                ) : (
+                  <button type="submit" className="btn btn-gold w-full shimmer" disabled={sending} aria-busy={sending}>
+                    {sending ? <><Loader2 size={18} className="animate-spin" /> Sending…</> : 'Send enquiry'}
+                  </button>
+                )}
+                {sendError && (
+                  <div role="alert" className="rounded-2xl bg-red-500/10 p-3 text-xs text-red-100 ring-1 ring-red-400/40">
+                    <p className="font-semibold">{sendError.uncertain ? 'We could not confirm the enquiry was received.' : 'The enquiry was not sent.'}</p>
+                    <p className="mt-1">{sendError.message} Your details are kept — try again, use WhatsApp below, or call.</p>
+                    <a className="mt-2 inline-flex items-center gap-1 underline" href={whatsappUrl(message)} target="_blank" rel="noopener noreferrer">Send on WhatsApp instead</a>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-2">
                   <button type="button" className="btn btn-ghost btn-sm" onClick={copy}>
                     <Copy size={16} /> Copy enquiry

@@ -1,6 +1,7 @@
 import { restaurant } from '../data/restaurant';
 import type { OrderDetails, ResolvedLine } from '../stores/cartStore';
 import { formatINR } from './format';
+import { useStorefront } from '../data/menuSync';
 
 const plain = (n: number) => `Rs. ${n}`; // WhatsApp-safe currency text
 
@@ -28,10 +29,10 @@ export function buildOrderMessage(lines: ResolvedLine[], d: OrderDetails, subtot
     .join('\n');
   const variants = lines.map((l) => (l.showVariant ? `${l.name}: ${l.variantLabel}` : `${l.name}: Standard`)).join('; ');
   const qty = lines.reduce((s, l) => s + l.qty, 0);
-  const when = [fmtDate(d.date), fmtTime(d.time)].filter(Boolean).join(', ') || 'As soon as possible';
+  const when = (d.when === 'later' ? [fmtDate(d.date), fmtTime(d.time)].filter(Boolean).join(', ') : '') || 'As soon as possible';
 
   return [
-    `${restaurant.name.toUpperCase()} — ORDER ENQUIRY`,
+    `${restaurant.name.toUpperCase()} — ORDER ENQUIRY (not yet placed)`,
     '',
     `Customer Name: ${d.name.trim()}`,
     ...(d.phone.trim() ? [`Contact Number: ${d.phone.trim()}`] : []),
@@ -43,6 +44,7 @@ export function buildOrderMessage(lines: ResolvedLine[], d: OrderDetails, subtot
     `Quantity: ${qty} item${qty === 1 ? '' : 's'}`,
     `Estimated Subtotal: ${plain(subtotal)}`,
     `Pickup or Delivery Preference: ${d.mode === 'pickup' ? 'Pickup' : 'Delivery (if available)'}`,
+    ...(d.mode === 'delivery' && d.address.trim() ? [`Delivery Address: ${d.address.trim()}`] : []),
     `Preferred Date and Time: ${when}`,
     `Additional Instructions: ${d.instructions.trim() || 'None'}`,
     '',
@@ -79,17 +81,36 @@ export function buildBulkMessage(b: BulkEnquiry): string {
   ].join('\n');
 }
 
-export const whatsappUrl = (text: string) =>
-  `https://wa.me/${restaurant.whatsapp.number}?text=${encodeURIComponent(text)}`;
+/** WhatsApp number: admin setting when loaded, otherwise the built-in one. Digits only, country code first. */
+export const waNumber = () => {
+  const n = useStorefront.getState().restaurant?.whatsapp_number ?? restaurant.whatsapp.number;
+  return String(n).replace(/\D/g, '');
+};
+
+/**
+ * Always used as a plain <a href target="_blank"> started by the customer's own tap —
+ * never window.open(…, 'noopener') which Chrome blocks silently.
+ */
+export const whatsappUrl = (text: string) => `https://wa.me/${waNumber()}?text=${encodeURIComponent(text)}`;
 
 export const telUrl = `tel:${restaurant.phone.e164}`;
+
+/* ───────────── WhatsApp message templates ───────────── */
+export const waTemplates = {
+  general: () => `Namaste! I have a question for ${restaurant.name}.`,
+  menu: (item?: string) =>
+    item ? `Namaste! I'd like to know the price and availability of ${item} at ${restaurant.name}.` : `Namaste! Could you share today's menu at ${restaurant.name}?`,
+  delivery: () => `Namaste! Do you deliver to my area? My location / landmark: `,
+  orderSupport: (bill: string) => `Namaste! I need help with my order ${bill} at ${restaurant.name}.`,
+  orderConfirm: (bill: string, total: string) =>
+    `Namaste! I placed order ${bill} (total ${total}) on the ${restaurant.name} website. Could you please confirm it?`,
+};
 
 export const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
   restaurant.mapsQuery,
 )}`;
 
-export const enquireItemMessage = (itemName: string) =>
-  `Namaste! I'd like to know the price and availability of ${itemName} at ${restaurant.name}.`;
+export const enquireItemMessage = (itemName: string) => waTemplates.menu(itemName);
 
 export async function copyText(text: string): Promise<boolean> {
   try {

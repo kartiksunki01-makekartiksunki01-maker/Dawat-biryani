@@ -1,6 +1,8 @@
+import { useCart } from '../../stores/cartStore';
+import { useMyOrders } from '../../lib/myOrders';
 import { motion } from 'framer-motion';
 import { useEffect, useRef } from 'react';
-import { useQuality, useSettings, type QualityMode } from '../../stores/uiStore';
+import { useQuality, useSettings, useUI, type QualityMode } from '../../stores/uiStore';
 import { sound, stopSpeaking } from '../../utils/sound';
 
 const MODES: { id: QualityMode; label: string }[] = [
@@ -110,6 +112,8 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             aria-label="Volume"
           />
         </label>
+        <Toggle label="Background music" hint={sound.hasUploadedTrack ? 'Restaurant’s music' : 'Soft built-in ambience'} checked={s.musicOn} onChange={s.setMusicOn} />
+        <Toggle label="Sound effects" hint="Taps, chimes" checked={s.sfxOn} onChange={s.setSfxOn} />
         <Toggle
           label="Anna’s voice"
           hint="Spoken dialogue with on-screen captions"
@@ -120,7 +124,41 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
           }}
         />
         <Toggle label="Show Dawat Anna" hint="Your virtual host" checked={s.hostVisible} onChange={s.setHostVisible} />
+        <YourData />
       </div>
     </motion.div>
+  );
+}
+
+/** Customer controls for what this device remembers. */
+function YourData() {
+  const remember = useCart((c) => c.remember);
+  const forgetDetails = useCart((c) => c.forgetDetails);
+  const lines = useCart((c) => c.lines);
+  const clear = useCart((c) => c.clear);
+  const orders = useMyOrders((o) => o.orders);
+  const forgetAll = useMyOrders((o) => o.forgetAll);
+  const showToast = useUI((u) => u.showToast);
+  return (
+    <div className="mt-3 space-y-2 border-t border-gold/15 pt-3 text-xs text-ivory/70">
+      <p className="t-eyebrow text-gold">Your data on this device</p>
+      <a className="flex min-h-[40px] items-center underline hover:text-gold" href="track.html">
+        View my orders ({orders.length})
+      </a>
+      <div className="flex flex-wrap gap-x-4 gap-y-1">
+        <button type="button" className="min-h-[40px] underline disabled:opacity-40" disabled={!remember} onClick={() => { forgetDetails(); showToast('Saved details removed.'); }}>
+          Forget my saved details
+        </button>
+        <button type="button" className="min-h-[40px] underline disabled:opacity-40" disabled={!lines.length} onClick={() => { clear(); showToast('Cart cleared.'); }}>
+          Clear cart
+        </button>
+        <button type="button" className="min-h-[40px] underline disabled:opacity-40" disabled={!orders.length} onClick={() => { forgetAll(); showToast('Order links removed from this device.'); }}>
+          Forget order links
+        </button>
+        <button type="button" className="min-h-[40px] underline" onClick={() => { try { localStorage.removeItem('dawat-host-seen-v2'); sessionStorage.removeItem('dawat-host-session-v2'); } catch { /* ignore */ } showToast('Anna’s tips will show again.'); }}>
+          Reset Anna’s tips
+        </button>
+      </div>
+    </div>
   );
 }

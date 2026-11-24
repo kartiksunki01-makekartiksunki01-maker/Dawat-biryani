@@ -83,7 +83,7 @@ export function QtyStepper({
   label: string;
   size?: 'sm' | 'md';
 }) {
-  const btn = size === 'sm' ? 'h-9 w-9' : 'h-11 w-11';
+  const btn = size === 'sm' ? 'h-10 w-10' : 'h-11 w-11';
   return (
     <div className="inline-flex items-center rounded-full bg-ivory/5 ring-1 ring-gold/30" role="group" aria-label={label}>
       <button

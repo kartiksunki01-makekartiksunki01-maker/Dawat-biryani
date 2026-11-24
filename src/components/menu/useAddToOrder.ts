@@ -13,7 +13,10 @@ export function useAddToOrder() {
     (itemId: string, variantId: string, qty: number, note?: string) => {
       const item = menu.find((m) => m.id === itemId);
       const variant = item?.variants.find((v) => v.id === variantId);
-      if (!item || !variant) return;
+      if (!item || !variant || item.soldOut || item.status !== 'available' || variant.available === false) {
+        showToast(item?.soldOut ? `${item.name} is sold out right now.` : 'This item is not available right now.');
+        return;
+      }
       add(itemId, variantId, qty, note);
       sound.play('add');
       const v = item.variants.length > 1 ? ` (${variant.label})` : '';

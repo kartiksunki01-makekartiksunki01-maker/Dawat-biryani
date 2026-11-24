@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { BookOpen, ChevronDown, MessageCircle, Volume2, VolumeX, X } from 'lucide-react';
 import { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useHost } from '../../stores/hostStore';
+import { useStorefront } from '../../data/menuSync';
 import { useSettings, useUI } from '../../stores/uiStore';
 import { hasWebGL } from '../../utils/device';
 import { scrollToTarget } from '../../utils/scroll';
@@ -31,6 +32,7 @@ function AnnaAvatar({ size = 40 }: { size?: number }) {
 
 export function HostDock() {
   const hostVisible = useSettings((s) => s.hostVisible);
+  const characterEnabled = useStorefront((s) => s.website?.character_enabled ?? true);
   const voiceOn = useSettings((s) => s.voiceOn);
   const setVoiceOn = useSettings((s) => s.setVoiceOn);
   const introDone = useUI((s) => s.introDone);
@@ -105,7 +107,7 @@ export function HostDock() {
     return () => document.removeEventListener('visibilitychange', onVis);
   }, []);
 
-  if (!hostVisible) return null;
+  if (!hostVisible || !characterEnabled) return null;
 
   const hiddenByOverlay = overlayOpen || scrollHidden;
 

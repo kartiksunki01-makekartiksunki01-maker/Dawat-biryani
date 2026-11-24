@@ -11,6 +11,8 @@ export interface Variant {
   label: string;
   /** Price in INR. */
   price: number;
+  /** false = this portion is temporarily unavailable. */
+  available?: boolean;
 }
 
 export interface MenuItem {
@@ -33,6 +35,9 @@ export interface MenuItem {
   ingredients?: string[];
   /** Only fill once confirmed by the restaurant. */
   allergens?: string[];
+  /** Temporarily sold out (still shown, cannot be ordered). */
+  soldOut?: boolean;
+  chefSpecial?: boolean;
 }
 
 export interface GalleryItem {

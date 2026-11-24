@@ -120,3 +120,10 @@ See `docs/TESTING.md` for what was tested, results, and known limitations.
 ## Backend & admin panel
 The site now reads dishes/prices from Supabase and saves enquiries as leads; the owner manages both at `/admin`.
 Setup steps (admin login, Vercel deploy, env variables): see `docs/BACKEND_SETUP.md`. Env template: `.env.example`.
+
+## V2.0 — real ordering & restaurant management (Nov 2026)
+- Customers place real orders (no payment online): server-checked prices, unique bill numbers, receipt PDF/print, tracking page.
+- Admin panel at `/admin` with 14 sections (orders, customers, bills, offers, menu, bulk, enquiries, notifications, analytics, appearance, music & intro, settings, security).
+- Database migrations: `supabase/migrations/` (already applied to production; additive only).
+- Reports and guides: `docs/V2_REPORT.md`, `docs/ADMIN_GUIDE.md`, `docs/DEPLOY_AND_ROLLBACK.md`, `docs/TESTING.md`.
+

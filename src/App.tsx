@@ -22,6 +22,8 @@ import { useReducedMotion } from './hooks/useMedia';
 import { useActiveSection } from './hooks/useActiveSection';
 import { useSettings } from './stores/uiStore';
 import { sound } from './utils/sound';
+import { useStorefront } from './data/menuSync';
+import { OffersSection } from './components/offers/OffersSection';
 
 export default function App() {
   const reduced = useReducedMotion();
@@ -33,6 +35,22 @@ export default function App() {
   useEffect(() => {
     sound.setVolume(volume);
   }, [volume]);
+
+  const musicOn = useSettings((s) => s.musicOn);
+  const sfxOn = useSettings((s) => s.sfxOn);
+  const website = useStorefront((s) => s.website);
+  useEffect(() => sound.setUserPrefs({ music: musicOn, sfx: sfxOn }), [musicOn, sfxOn]);
+  useEffect(() => {
+    if (!website) return;
+    sound.configure({ musicUrl: website.music_url, musicEnabled: website.music_enabled, sfxEnabled: website.sfx_enabled });
+    // the restaurant's default volume applies until a visitor picks their own
+    try {
+      const saved = JSON.parse(localStorage.getItem('dawat-settings-v1') ?? '{}') as { state?: { volumeChosen?: boolean } };
+      if (!saved.state?.volumeChosen) useSettings.setState({ volume: website.music_volume });
+    } catch {
+      /* ignore */
+    }
+  }, [website]);
 
   // Re-measure scroll-driven animations once web fonts have settled.
   useEffect(() => {
@@ -46,6 +64,7 @@ export default function App() {
       <Navbar />
       <main id="main">
         <StorySection />
+        <OffersSection />
         <MenuSection />
         <OurStory />
         <CraftedWithCare />

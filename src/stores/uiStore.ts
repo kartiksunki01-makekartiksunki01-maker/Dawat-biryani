@@ -8,8 +8,14 @@ interface SettingsState {
   qualityMode: QualityMode;
   soundOn: boolean;
   volume: number; // 0..1
+  /** true once the visitor moved the volume slider themselves */
+  volumeChosen: boolean;
   voiceOn: boolean;
   hostVisible: boolean;
+  musicOn: boolean;
+  sfxOn: boolean;
+  setMusicOn: (v: boolean) => void;
+  setSfxOn: (v: boolean) => void;
   setQualityMode: (q: QualityMode) => void;
   setSoundOn: (v: boolean) => void;
   setVolume: (v: number) => void;
@@ -24,11 +30,16 @@ export const useSettings = create<SettingsState>()(
       qualityMode: 'auto',
       soundOn: false,
       volume: 0.6,
+      volumeChosen: false,
       voiceOn: false,
       hostVisible: true,
+      musicOn: true,
+      sfxOn: true,
+      setMusicOn: (musicOn) => set({ musicOn }),
+      setSfxOn: (sfxOn) => set({ sfxOn }),
       setQualityMode: (qualityMode) => set({ qualityMode }),
       setSoundOn: (soundOn) => set({ soundOn }),
-      setVolume: (volume) => set({ volume }),
+      setVolume: (volume) => set({ volume, volumeChosen: true }),
       setVoiceOn: (voiceOn) => set({ voiceOn }),
       setHostVisible: (hostVisible) => set({ hostVisible }),
     }),
@@ -36,7 +47,7 @@ export const useSettings = create<SettingsState>()(
       name: 'dawat-settings-v1',
       storage: createJSONStorage(() => localStorage),
       // Never restore "sound on" automatically — audio must start from a user gesture.
-      partialize: (s) => ({ qualityMode: s.qualityMode, volume: s.volume, hostVisible: s.hostVisible }),
+      partialize: (s) => ({ qualityMode: s.qualityMode, volume: s.volume, volumeChosen: s.volumeChosen, hostVisible: s.hostVisible, musicOn: s.musicOn, sfxOn: s.sfxOn }),
     },
   ),
 );

@@ -23,7 +23,7 @@ export function Footer() {
             {restaurant.address.postalCode}
             <br />
             Open {restaurant.hours.display} ·{' '}
-            <a className="font-num hover:text-gold" href={telUrl}>
+            <a className="inline-flex min-h-[40px] items-center font-num hover:text-gold" href={telUrl}>
               {restaurant.phone.display}
             </a>
           </p>
@@ -58,7 +58,7 @@ export function Footer() {
                     e.preventDefault();
                     scrollToTarget(l.id);
                   }}
-                  className="inline-block py-1.5 text-ivory/65 transition hover:text-gold"
+                  className="inline-flex min-h-[40px] items-center text-ivory/65 transition hover:text-gold"
                 >
                   {l.label}
                 </a>
@@ -67,12 +67,19 @@ export function Footer() {
           </ul>
         </nav>
 
-        <div className="text-sm text-ivory/55">
+        <div id="privacy" className="scroll-mt-28 text-sm text-ivory/55">
           <p className="t-eyebrow text-gold">Privacy</p>
           <p className="mt-4 leading-relaxed">
-            This website doesn’t use cookies or analytics and doesn’t collect your personal data. Your order and settings are saved only in
-            your own browser. When you send an enquiry, you share it yourself — through WhatsApp or a phone call — directly with the
-            restaurant.
+            When you place an order or send a bulk enquiry, your name, mobile number, the items, your timing and (for delivery) your
+            address are stored securely with the restaurant so it can prepare and hand over your order. Only the restaurant’s staff can see
+            them. They are not sold or shared, and you can ask the restaurant to delete them.
+          </p>
+          <p className="mt-4 leading-relaxed">
+            This site uses no advertising cookies or analytics. Your cart, preferences and links to your own orders are kept in this
+            browser; your details are remembered only if you tick “Remember my details”.
+          </p>
+          <p className="mt-4 leading-relaxed">
+            <a className="inline-flex min-h-[40px] items-center underline hover:text-gold" href="track.html">My orders on this device</a>
           </p>
           <p className="mt-4 leading-relaxed">
             Dish and gallery images are representative promotional artwork. Dawat Anna is a fictional virtual host.
