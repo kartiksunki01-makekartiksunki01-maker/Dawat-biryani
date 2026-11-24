@@ -14,7 +14,7 @@ import { Finale } from './components/finale/Finale';
 import { VisitUs } from './components/location/VisitUs';
 import { Footer } from './components/finale/Footer';
 import { CartDrawer } from './components/cart/CartDrawer';
-import { HostDock } from './components/character/HostDock';
+import { ChatWidget } from './components/chat/ChatWidget';
 import { Toast } from './components/ui/Toast';
 import { ScrollProgress } from './components/motion/Motion';
 import { initSmoothScroll } from './utils/scroll';
@@ -77,7 +77,7 @@ export default function App() {
       <Footer />
       <CartDrawer />
       <ProductSheet />
-      <HostDock />
+      <ChatWidget />
       <Toast />
       <div className="film-grain" aria-hidden />
     </>

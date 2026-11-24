@@ -53,7 +53,7 @@ export function MusicAnimations() {
             <Toggle label="Show the intro" checked={d.intro_enabled} onChange={(v) => s.set({ intro_enabled: v })} />
             <Toggle label="Also show it to returning visitors" hint="Off = only the first visit on each device" checked={d.intro_for_returning} onChange={(v) => s.set({ intro_for_returning: v })} />
             <Field label={`Duration: ${(d.intro_duration_ms / 1000).toFixed(1)} seconds (including fade)`}>
-              <input type="range" min={1000} max={3000} step={100} value={d.intro_duration_ms} onChange={(e) => s.set({ intro_duration_ms: Number(e.target.value) })} className="w-full accent-[#D4AF37]" />
+              <input type="range" min={2000} max={3000} step={100} value={d.intro_duration_ms} onChange={(e) => s.set({ intro_duration_ms: Number(e.target.value) })} className="w-full accent-[#D4AF37]" />
             </Field>
             <a className="mt-2 inline-flex min-h-[40px] items-center rounded-lg border border-white/20 px-4 text-sm font-semibold hover:bg-white/10" href="./?intro=preview" target="_blank" rel="noopener noreferrer">Preview intro (save first)</a>
           </Card>

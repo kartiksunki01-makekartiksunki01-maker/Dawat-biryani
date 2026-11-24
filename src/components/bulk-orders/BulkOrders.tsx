@@ -7,7 +7,8 @@ import { ApiError, submitEnquiry } from '../../lib/api';
 import { useHost } from '../../stores/hostStore';
 import { useUI } from '../../stores/uiStore';
 import { hasWebGL } from '../../utils/device';
-import { buildBulkMessage, copyText, telUrl, whatsappUrl, type BulkEnquiry } from '../../utils/order';
+import {buildBulkMessage, copyText, telUrl, type BulkEnquiry} from '../../utils/order';
+import { WhatsAppLink } from '../ui/WhatsAppLink';
 import { sound } from '../../utils/sound';
 import { useInView, useReducedMotion } from '../../hooks/useMedia';
 import { Reveal } from '../motion/Motion';
@@ -310,9 +311,9 @@ export function BulkOrders() {
                   <div role="status" className="space-y-3 rounded-2xl bg-emerald-500/10 p-4 text-sm text-ivory ring-1 ring-emerald-400/40">
                     <p className="flex items-center gap-2 font-semibold text-emerald-200"><CheckCircle2 size={18} /> Enquiry received by the restaurant</p>
                     <p className="text-xs text-ivory/75">Reference {sent.id.slice(0, 8).toUpperCase()}. {restaurant.name} will contact you on {form.phone} with a quotation. No price is confirmed until they reply.</p>
-                    <a className="btn btn-emerald btn-sm w-full" href={whatsappUrl(message)} target="_blank" rel="noopener noreferrer">
+                    <WhatsAppLink className="btn btn-emerald btn-sm w-full" text={message}>
                       <WhatsAppIcon /> Also send on WhatsApp (optional)
-                    </a>
+                    </WhatsAppLink>
                     <button type="button" className="btn btn-ghost btn-sm w-full" onClick={() => { setSent(null); setTried(false); setConsent(false); }}>
                       Send another enquiry
                     </button>
@@ -326,7 +327,7 @@ export function BulkOrders() {
                   <div role="alert" className="rounded-2xl bg-red-500/10 p-3 text-xs text-red-100 ring-1 ring-red-400/40">
                     <p className="font-semibold">{sendError.uncertain ? 'We could not confirm the enquiry was received.' : 'The enquiry was not sent.'}</p>
                     <p className="mt-1">{sendError.message} Your details are kept — try again, use WhatsApp below, or call.</p>
-                    <a className="mt-2 inline-flex items-center gap-1 underline" href={whatsappUrl(message)} target="_blank" rel="noopener noreferrer">Send on WhatsApp instead</a>
+                    <WhatsAppLink className="mt-2 inline-flex items-center gap-1 underline" text={message}>Send on WhatsApp instead</WhatsAppLink>
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-2">

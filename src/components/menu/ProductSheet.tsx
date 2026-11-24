@@ -6,7 +6,8 @@ import { useMenuVersion } from '../../data/menuSync';
 import type { MenuItem } from '../../data/types';
 import { useUI } from '../../stores/uiStore';
 import { asset, formatINR } from '../../utils/format';
-import { enquireItemMessage, telUrl, whatsappUrl } from '../../utils/order';
+import {enquireItemMessage, telUrl} from '../../utils/order';
+import { WhatsAppLink } from '../ui/WhatsAppLink';
 import { useDialog } from '../ui/Sheet';
 import { DietMark, PromoLabel, QtyStepper } from '../ui/Bits';
 import { categoryLabel, VariantPicker } from './MenuCard';
@@ -108,9 +109,9 @@ function ProductBody({ item, onClose, onOpen }: { item: MenuItem; onClose: () =>
           <div className="glass rounded-2xl p-5">
             <p className="text-sm text-ivory/80">Price and availability for this dish haven’t been published yet.</p>
             <div className="mt-4 grid grid-cols-2 gap-2">
-              <a className="btn btn-emerald btn-sm" href={whatsappUrl(enquireItemMessage(item.name))} target="_blank" rel="noopener noreferrer">
+              <WhatsAppLink className="btn btn-emerald btn-sm" text={enquireItemMessage(item.name)}>
                 Enquire on WhatsApp
-              </a>
+              </WhatsAppLink>
               <a className="btn btn-ghost btn-sm" href={telUrl}>
                 Call
               </a>

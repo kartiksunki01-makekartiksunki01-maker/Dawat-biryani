@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
-import { hostLines, type HostEvent } from '../../stores/hostStore';
-import { Btn, Card, Field, Input, Notice, PageHeader, Skeleton, Textarea, Toggle, useAdmin } from '../ui';
+import { Btn, Card, Field, Input, Notice, PageHeader, Skeleton, Toggle, useAdmin } from '../ui';
 import { useSingleton } from './settingsHook';
 
 export interface WebsiteRow extends Record<string, unknown> {
@@ -9,14 +8,6 @@ export interface WebsiteRow extends Record<string, unknown> {
   character_enabled: boolean; character_messages: Record<string, string>; featured_dish_ids: string[];
 }
 
-const EDITABLE: { id: HostEvent; label: string }[] = [
-  { id: 'welcome', label: 'First-visit welcome' },
-  { id: 'menu', label: 'When the menu comes into view' },
-  { id: 'bulk', label: 'When bulk orders come into view' },
-  { id: 'added', label: 'After adding an item (once per visit)' },
-  { id: 'placed', label: 'After an order is saved' },
-  { id: 'enquiry_sent', label: 'After a bulk enquiry is saved' },
-];
 
 export function Appearance() {
   const { sb } = useAdmin();
@@ -38,18 +29,6 @@ export function Appearance() {
             <h2 className="mb-2 text-sm font-semibold text-gold">Announcement banner</h2>
             <Toggle label="Show announcement" checked={d.announcement_enabled} onChange={(v) => s.set({ announcement_enabled: v })} />
             <Field label="Text (max 160 characters)" hint="Only real, current information — e.g. “Closed on 25 Dec”."><Input maxLength={160} value={d.announcement_text} onChange={(e) => s.set({ announcement_text: e.target.value })} /></Field>
-          </Card>
-          <Card>
-            <h2 className="mb-2 text-sm font-semibold text-gold">Dawat Anna (3D host)</h2>
-            <Toggle label="Show Dawat Anna on the website" checked={d.character_enabled} onChange={(v) => s.set({ character_enabled: v })} />
-            <p className="mb-3 text-xs text-ivory/50">Each message shows at most once per visitor (or once per visit). Leave a box empty to use the default.</p>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {EDITABLE.map((e) => (
-                <Field key={e.id} label={e.label} hint={`Default: “${hostLines[e.id][0].text}”`}>
-                  <Textarea rows={2} maxLength={160} value={d.character_messages[e.id] ?? ''} onChange={(ev) => s.set({ character_messages: { ...d.character_messages, [e.id]: ev.target.value } })} />
-                </Field>
-              ))}
-            </div>
           </Card>
           <Card>
             <h2 className="mb-2 text-sm font-semibold text-gold">Featured dishes</h2>

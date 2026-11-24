@@ -92,6 +92,10 @@ export const waNumber = () => {
  * never window.open(…, 'noopener') which Chrome blocks silently.
  */
 export const whatsappUrl = (text: string) => `https://wa.me/${waNumber()}?text=${encodeURIComponent(text)}`;
+/** WhatsApp Web (desktop browsers / devices without the app). */
+export const whatsappWebUrl = (text: string) => `https://web.whatsapp.com/send?phone=${waNumber()}&text=${encodeURIComponent(text)}`;
+export const waDisplayNumber = () => `+${waNumber()}`;
+export const isMobileUA = () => /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
 
 export const telUrl = `tel:${restaurant.phone.e164}`;
 

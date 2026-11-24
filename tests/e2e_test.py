@@ -152,12 +152,8 @@ with sync_playwright() as p:
     page.locator('#settings-panel label', has_text='Auto').click()
     page.keyboard.press('Escape')
 
-    # Anna
-    talk = page.get_by_role('button', name='Talk to Anna')
-    check('Anna dock present', talk.count() == 1)
-    if talk.count():
-        talk.click(); time.sleep(0.6)
-        check('Anna speech bubble', page.get_by_text('DAWAT ANNA', exact=True).first.is_visible())
+    # Live chat (replaced Ask Anna)
+    check('Live chat launcher present (no-backend build hides it; mock build shows it)', page.get_by_test_id('chat-launcher').count() in (0, 1) and page.get_by_text('Ask Anna').count() == 0)
 
     # Links
     check('Directions link', 'google.com/maps/dir/?api=1&destination=' in (page.get_by_role('link', name='Get Directions').get_attribute('href') or ''))

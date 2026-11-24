@@ -38,11 +38,17 @@ export function Offers() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [del, setDel] = useState<Offer | null>(null);
   const [showArchived, setShowArchived] = useState(false);
+  const [usage, setUsage] = useState<Offer | null>(null);
+  const [given, setGiven] = useState<Record<string, number>>({});
 
   const load = useCallback(async () => {
     const { data, error } = await sb.from('offers').select('*').order('created_at', { ascending: false });
     if (error) { setErr(errText(error, 'Could not load offers.')); return; }
     setErr('');
+    const red = await sb.from('offer_redemptions').select('offer_id,discount');
+    const g: Record<string, number> = {};
+    for (const r of (red.data as { offer_id: string; discount: number }[] | null) ?? []) g[r.offer_id] = (g[r.offer_id] ?? 0) + Number(r.discount);
+    setGiven(g);
     setRows((data as Offer[]).map((o) => ({ ...o, discount_value: Number(o.discount_value), min_order: Number(o.min_order), max_discount: o.max_discount == null ? null : Number(o.max_discount) })));
   }, [sb]);
   useEffect(() => { void load(); }, [load]);
@@ -54,16 +60,23 @@ export function Offers() {
 
   const shown = (rows ?? []).filter((o) => showArchived || !o.archived_at);
   return (
-    <section aria-label="Offers and discounts">
-      <PageHeader title="Offers & Discounts" intro="Every discount is checked by the database at checkout — expired, used-up or invalid coupons are refused with a clear reason."
+    <section aria-label="Coupons and discounts">
+      <PageHeader title="Coupons & Discounts" intro="Create coupon codes and automatic offers. Every discount is checked by the database at checkout — expired, used-up or invalid coupons are refused with a clear reason."
         actions={<>
           <Btn onClick={() => void load()}><RefreshCw size={16} /> Refresh</Btn>
           <a className="inline-flex min-h-[40px] items-center gap-2 rounded-lg border border-white/20 px-4 text-sm font-semibold hover:bg-white/10" href="./#offers" target="_blank" rel="noopener noreferrer"><Eye size={16} /> Preview on website</a>
-          <Btn tone="gold" onClick={() => setDraft({ ...blank })}><Plus size={16} /> New offer</Btn>
+          <Btn tone="gold" onClick={() => setDraft({ ...blank })}><Plus size={16} /> Create coupon</Btn>
         </>} />
       <label className="mb-4 flex items-center gap-2 text-xs text-ivory/60"><input type="checkbox" className="h-4 w-4 accent-[#D4AF37]" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Show archived</label>
       {err && <Notice kind="err">{err}</Notice>}
-      {!rows ? <Skeleton rows={3} /> : !shown.length ? <Empty title="No offers yet">Create one with “New offer”. It stays inactive until you switch it on.</Empty> : (
+      {rows && (
+        <dl className="mb-4 grid grid-cols-3 gap-2 text-center" aria-label="Coupon summary">
+          <div className="rounded-xl border border-white/10 p-3"><dt className="text-[11px] text-ivory/60">Live now</dt><dd className="font-num text-xl text-gold" data-testid="stat-live">{rows.filter((o) => offerState(o).label === 'Live').length}</dd></div>
+          <div className="rounded-xl border border-white/10 p-3"><dt className="text-[11px] text-ivory/60">Times used</dt><dd className="font-num text-xl text-gold" data-testid="stat-used">{rows.reduce((a, o) => a + o.used_count, 0)}</dd></div>
+          <div className="rounded-xl border border-white/10 p-3"><dt className="text-[11px] text-ivory/60">Discount given</dt><dd className="font-num text-xl text-gold" data-testid="stat-given">{inr(Object.values(given).reduce((a, b) => a + b, 0))}</dd></div>
+        </dl>
+      )}
+      {!rows ? <Skeleton rows={3} /> : !shown.length ? <Empty title="No coupons yet">Create one with “Create coupon”. It stays inactive until you switch it on.</Empty> : (
         <ul className="grid gap-3 md:grid-cols-2">
           {shown.map((o) => {
             const st = offerState(o);
@@ -76,6 +89,7 @@ export function Offers() {
                   </div>
                   <ActionMenu label={`Actions for ${o.title}`} items={[
                     { label: 'Edit', onClick: () => setDraft({ ...o }) },
+                    { label: 'View usage', onClick: () => setUsage(o) },
                     { label: 'Duplicate', onClick: () => setDraft({ ...o, id: undefined, title: `${o.title} (copy)`.slice(0, 80), code: null, is_active: false }) },
                     o.is_active ? { label: 'Deactivate', onClick: () => void patch(o, { is_active: false }, 'Offer deactivated.') } : { label: 'Activate', onClick: () => void patch(o, { is_active: true }, 'Offer activated.'), disabled: !!o.archived_at },
                     o.archived_at ? { label: 'Restore', onClick: () => void patch(o, { archived_at: null }, 'Offer restored.') } : { label: 'Archive', onClick: () => void patch(o, { archived_at: new Date().toISOString(), is_active: false }, 'Offer archived.') },
@@ -89,7 +103,7 @@ export function Offers() {
                   <Badge>{o.applies_to === 'all' ? 'Whole menu' : o.applies_to === 'dishes' ? `${o.dish_ids.length} dish(es)` : `${o.category_ids.length} category(ies)`}</Badge>
                 </div>
                 <p className="mt-2 text-xs text-ivory/55">
-                  Used {o.used_count}{o.usage_limit ? ` / ${o.usage_limit}` : ''} times{o.min_order ? ` · min order ${inr(o.min_order)}` : ''}
+                  Used {o.used_count}{o.usage_limit ? ` / ${o.usage_limit}` : ''} times · {inr(given[o.id] ?? 0)} given as discount{o.min_order ? ` · min order ${inr(o.min_order)}` : ''}
                   {o.starts_at ? ` · from ${fmtDT(o.starts_at)}` : ''}{o.ends_at ? ` · until ${fmtDT(o.ends_at)}` : ''}
                 </p>
               </li>
@@ -97,6 +111,7 @@ export function Offers() {
           })}
         </ul>
       )}
+      {usage && <UsageModal offer={usage} total={given[usage.id] ?? 0} onClose={() => setUsage(null)} />}
       {draft && <OfferForm draft={draft} onClose={() => setDraft(null)} onSaved={() => { setDraft(null); void load(); }} />}
       <Confirm open={!!del} onClose={() => setDel(null)} danger title="Delete offer?"
         body={del?.used_count ? <p>This offer was used {del.used_count} time(s). To keep a correct history it can’t be deleted — archive it instead.</p> : <p>“{del?.title}” has never been used and will be deleted permanently.</p>}
@@ -155,7 +170,7 @@ function OfferForm({ draft, onClose, onSaved }: { draft: Draft; onClose: () => v
   const toggleIn = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id]);
 
   return (
-    <Modal open onClose={onClose} title={f.id ? 'Edit offer' : 'New offer'} wide>
+    <Modal open onClose={onClose} title={f.id ? 'Edit coupon / offer' : 'Create coupon / offer'} wide>
       <div className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Title *"><Input value={f.title} maxLength={80} onChange={(e) => set({ title: e.target.value })} placeholder="Weekend feast" /></Field>
@@ -214,6 +229,36 @@ function OfferForm({ draft, onClose, onSaved }: { draft: Draft; onClose: () => v
           <Btn tone="gold" busy={busy} disabled={!!problems.length || uploading} onClick={() => void save()}>Save offer</Btn>
         </div>
       </div>
+    </Modal>
+  );
+}
+
+interface Redemption { discount: number; created_at: string; customer_phone: string | null; orders: { bill_number: string; total: number } | null }
+function UsageModal({ offer, total, onClose }: { offer: Offer; total: number; onClose: () => void }) {
+  const { sb } = useAdmin();
+  const [rows, setRows] = useState<Redemption[] | null>(null);
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    void (async () => {
+      const r = await sb.from('offer_redemptions').select('order_id,discount,created_at,customer_phone').eq('offer_id', offer.id).order('created_at', { ascending: false }).limit(50);
+      if (r.error) { setErr(errText(r.error)); return; }
+      const reds = r.data as { order_id: string; discount: number; created_at: string; customer_phone: string | null }[];
+      const o = reds.length ? await sb.from('orders').select('id,bill_number,total').in('id', reds.map((x) => x.order_id)) : { data: [], error: null };
+      if (o.error) { setErr(errText(o.error)); return; }
+      const byId = new Map((o.data as { id: string; bill_number: string; total: number }[]).map((x) => [x.id, x]));
+      setRows(reds.map((x) => ({ ...x, orders: byId.get(x.order_id) ?? null })));
+    })();
+  }, [sb, offer.id]);
+  return (
+    <Modal open onClose={onClose} title={`Usage — ${offer.code ?? offer.title}`}>
+      <p className="text-sm text-ivory/70">Used {offer.used_count}{offer.usage_limit ? ` of ${offer.usage_limit}` : ''} times · {inr(total)} given as discount.</p>
+      {err && <Notice kind="err">{err}</Notice>}
+      {!rows ? <Skeleton rows={2} /> : !rows.length ? <Empty title="Not used yet">Orders that use this coupon will be listed here.</Empty> : (
+        <table className="mt-3 w-full text-sm"><thead><tr className="text-left text-xs text-ivory/50"><th className="py-1">Bill</th><th>When</th><th className="text-right">Discount</th><th className="text-right">Order total</th></tr></thead>
+          <tbody>{rows.map((r, i) => (
+            <tr key={i} className="border-t border-white/10"><td className="py-1.5 font-num">{r.orders?.bill_number ?? '—'}</td><td>{fmtDT(r.created_at)}</td><td className="text-right font-num">{inr(Number(r.discount))}</td><td className="text-right font-num">{r.orders ? inr(Number(r.orders.total)) : '—'}</td></tr>
+          ))}</tbody></table>
+      )}
     </Modal>
   );
 }

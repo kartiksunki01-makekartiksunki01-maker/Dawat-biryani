@@ -78,7 +78,7 @@ with sync_playwright() as pw:
     check('Dashboard shows real counts (2 orders today, 2 pending)', re.search(r'2\s*Orders in range', dash) is not None and re.search(r'2\s*Pending right now', dash) is not None, dash[:160].replace('\n', ' '))
     nav = page.get_by_role('navigation', name='Admin sections').first
     labels = nav.locator('ul a').all_inner_texts()
-    check('Sidebar has all 14 sections (+ View site / Sign out)', len(labels) == 14 and nav.get_by_role('link', name='View site').count() == 1, str(len(labels)))
+    check('Sidebar has all 15 sections (+ View site / Sign out)', len(labels) == 15 and nav.get_by_role('link', name='View site').count() == 1, str(len(labels)))
 
     # every section opens without errors
     inventory = []
@@ -88,7 +88,7 @@ with sync_playwright() as pw:
         h = page.locator('main h1').first.inner_text() if page.locator('main h1').count() else ''
         inventory.append((lab, h))
     bad = [x for x in inventory if not x[1]]
-    check('All 14 admin sections open and render a heading', not bad, str(bad))
+    check('All 15 admin sections open and render a heading', not bad, str(bad))
     json.dump(inventory, open(OUT + 'admin_sections.json', 'w'))
 
     # ── Orders ──
@@ -139,9 +139,9 @@ with sync_playwright() as pw:
     check('Bill search finds exactly that bill', page.locator('main li').count() == 1)
 
     # ── Offers ──
-    nav.get_by_role('link', name=re.compile('^Offers')).click(); page.wait_for_timeout(800)
-    page.get_by_role('button', name='New offer').click()
-    f = page.get_by_role('dialog', name='New offer')
+    nav.get_by_role('link', name=re.compile('^Coupons')).click(); page.wait_for_timeout(800)
+    page.get_by_role('button', name='Create coupon').click()
+    f = page.get_by_role('dialog', name='Create coupon')
     f.get_by_label('Title *').fill('Twenty off')
     f.get_by_label(re.compile('^Coupon code')).fill('test20')
     f.get_by_label('Discount %').fill('20')
@@ -154,6 +154,31 @@ with sync_playwright() as pw:
     check('Offer saved with uppercase code and active', len(off) == 1 and off[0]['is_active'] and float(off[0]['discount_value']) == 20, str(off))
     sf = post('/rest/v1/rpc/get_storefront', {})
     check('New public offer appears on the website data', any(o['code'] == 'TEST20' for o in sf['offers']))
+
+    # coupon used by a real order → stats + usage list
+    cp = {'idempotency_key': str(uuid.uuid4()), 'access_token': uuid.uuid4().hex + uuid.uuid4().hex, 'name': 'Coupon Buyer', 'phone': '9844444444',
+          'mode': 'pickup', 'confirm': True, 'coupon': 'TEST20', 'items': [{'variant_id': variants['mutton-biryani'][0]['id'], 'qty': 1}]}
+    oc = post('/rest/v1/rpc/place_order', {'p': cp})
+    check('Order with the new coupon gets the discount from the database', float(oc.get('discount', 0)) > 0 and oc.get('coupon_code') == 'TEST20', str(oc)[:150])
+    page.get_by_role('button', name=re.compile('Refresh')).click(); page.wait_for_timeout(900)
+    check('Coupon summary shows live count, uses and discount given', page.get_by_test_id('stat-used').inner_text() == '1' and '₹' in page.get_by_test_id('stat-given').inner_text() and page.get_by_test_id('stat-live').inner_text() == '1', page.get_by_test_id('stat-given').inner_text())
+    page.locator('li', has_text='Twenty off').get_by_role('button', name=re.compile('Actions for')).click()
+    page.get_by_role('menuitem', name='View usage').click()
+    u = page.get_by_role('dialog', name=re.compile('Usage'))
+    page.wait_for_timeout(1200)
+    check('Usage list shows the bill number that used the coupon', u.get_by_text(oc['bill_number']).count() == 1, u.inner_text()[:200].replace('\n',' '))
+    u.get_by_role('button', name=re.compile('Close', re.I)).first.click(); page.wait_for_timeout(300)
+    page.locator('li', has_text='Twenty off').get_by_role('button', name=re.compile('Actions for')).click()
+    page.get_by_role('menuitem', name='Edit').click()
+    ed = page.get_by_role('dialog', name=re.compile('Edit coupon'))
+    ed.get_by_label('Discount %').fill('25'); ed.get_by_label(re.compile('^Maximum discount')).fill('50')
+    ed.get_by_role('button', name='Save offer').click(); page.wait_for_timeout(900)
+    e2 = sql("select discount_value, max_discount from public.offers where code='TEST20'")[0]
+    check('Coupon edit (25%, max Rs 50) saved', float(e2['discount_value']) == 25 and float(e2['max_discount']) == 50, str(e2))
+    page.locator('li', has_text='Twenty off').get_by_role('button', name=re.compile('Actions for')).click()
+    page.get_by_role('menuitem', name=re.compile('^Delete')).click()
+    page.get_by_role('dialog').get_by_role('button', name='Archive instead').click(); page.wait_for_timeout(900)
+    check('A used coupon cannot be deleted — it is archived (history kept)', sql("select archived_at is not null a from public.offers where code='TEST20'")[0]['a'] is True)
 
     # ── Menu ──
     nav.get_by_role('link', name=re.compile('^Menu')).click(); page.wait_for_timeout(1000)
@@ -196,7 +221,7 @@ with sync_playwright() as pw:
 
     # ── Notifications ──
     nav.get_by_role('link', name=re.compile('^Notifications')).click(); page.wait_for_timeout(1000)
-    check('Notifications list real events (3 orders + 1 bulk)', page.locator('main li').count() == 4, str(page.locator('main li').count()))
+    check('Notifications list real events (4 orders + 1 bulk)', page.locator('main li').count() == 5, str(page.locator('main li').count()))
     page.get_by_role('button', name='Mark all as read').click(); page.wait_for_timeout(1000)
     check('Mark all as read clears the unread badge', page.locator('main').get_by_text('Unread', exact=True).count() == 0)
 

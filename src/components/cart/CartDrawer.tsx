@@ -9,7 +9,8 @@ import { resolveLines, subtotalOf, useCart, type ResolvedLine } from '../../stor
 import { useHost } from '../../stores/hostStore';
 import { useUI } from '../../stores/uiStore';
 import { asset, formatINR } from '../../utils/format';
-import { buildOrderMessage, copyText, telUrl, whatsappUrl } from '../../utils/order';
+import {buildOrderMessage, copyText, telUrl} from '../../utils/order';
+import { WhatsAppLink } from '../ui/WhatsAppLink';
 import { asapAvailable, dateOptions, label12, timeSlots, toIstIso } from '../../utils/schedule';
 import { scrollToTarget } from '../../utils/scroll';
 import { sound } from '../../utils/sound';
@@ -115,9 +116,9 @@ function OfflineOrdering({ lines, reason }: { lines: ResolvedLine[]; reason: str
         <Phone size={16} /> Call {restaurant.phone.display} to order
       </a>
       <div className="grid grid-cols-2 gap-2">
-        <a className="btn btn-emerald btn-sm" href={whatsappUrl(message)} target="_blank" rel="noopener noreferrer">
+        <WhatsAppLink className="btn btn-emerald btn-sm" text={message}>
           <WhatsAppIcon /> Enquire on WhatsApp
-        </a>
+        </WhatsAppLink>
         <button
           type="button"
           className="btn btn-ghost btn-sm"
@@ -197,7 +198,7 @@ export function CartDrawer() {
 
   // authoritative amount from the database
   useEffect(() => {
-    if (step !== 'checkout' || !online || paused || !items.length) return;
+    if ((step !== 'checkout' && step !== 'cart') || !online || paused || !items.length) return;
     let alive = true;
     setQuoteState('loading');
     const t = window.setTimeout(async () => {
@@ -614,7 +615,29 @@ export function CartDrawer() {
             <span className="text-sm text-ivory/70">Items subtotal</span>
             <motion.span key={subtotal} initial={{ scale: 1.15, color: '#F59E0B' }} animate={{ scale: 1, color: '#D4AF37' }} className="font-num text-2xl font-bold">{formatINR(subtotal)}</motion.span>
           </div>
-          <p className="mt-1 text-xs text-ivory/50">Offers, delivery and the final total are calculated at checkout.</p>
+          <div className="mt-3">
+            <label className="field-label" htmlFor="cart-coupon">Have a coupon code?</label>
+            <div className="flex gap-2">
+              <input id="cart-coupon" className="field font-num uppercase" value={couponInput} onChange={(e) => setCouponInput(e.target.value.slice(0, 20))} placeholder="e.g. DAWAT10" onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); applyCoupon(); } }} />
+              {details.coupon ? (
+                <button type="button" className="btn btn-ghost btn-sm shrink-0" onClick={() => { setDetails({ coupon: '' }); setCouponInput(''); }}>Remove</button>
+              ) : (
+                <button type="button" className="btn btn-ghost btn-sm shrink-0" onClick={applyCoupon} disabled={!couponInput.trim()}>Apply</button>
+              )}
+            </div>
+            <div aria-live="polite" className="mt-1 min-h-[1.1rem] text-xs">
+              {details.coupon && quoteState === 'loading' && <span className="text-ivory/60">Checking {details.coupon}…</span>}
+              {details.coupon && quoteState !== 'loading' && quote && (
+                quote.discount > 0
+                  ? <span className="text-emerald-300">✓ {details.coupon} applied — you save {formatINR(quote.discount)}</span>
+                  : <span className="text-red-300">{quote.issues.find((i) => i.code === 'coupon_invalid')?.message ?? 'This coupon can’t be applied to this order.'}</span>
+              )}
+            </div>
+          </div>
+          {quote && quote.discount > 0 && (
+            <div className="mt-1 flex items-baseline justify-between text-sm"><span className="text-ivory/70">Estimated total after discount</span><span className="font-num text-gold">{formatINR(quote.subtotal - quote.discount)}</span></div>
+          )}
+          <p className="mt-1 text-xs text-ivory/50">Delivery and the final total are confirmed at checkout.</p>
           <button type="button" className="btn btn-gold mt-4 w-full" onClick={goCheckout} disabled={!orderable.length || orderable.length !== lines.length}>
             Continue to checkout
           </button>

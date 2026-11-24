@@ -16,6 +16,8 @@ const SIG = {
   get_order: [['p_order_id', 'uuid'], ['p_token', 'text']], get_my_orders: [['p', 'jsonb']], submit_enquiry: [['p', 'jsonb']],
   admin_stats: [['p_from', 'date'], ['p_to', 'date']], admin_customers: [], admin_remove_customer: [['p_customer_id', 'uuid']],
   admin_convert_lead: [['p_lead_id', 'uuid']], admin_mark_all_read: [], admin_get_order: [['p_order_id', 'uuid']],
+  chat_status: [], chat_send: [['p', 'jsonb']], chat_fetch: [['p', 'jsonb']], admin_chat_reply: [['p', 'jsonb']], admin_chat_action: [['p', 'jsonb']],
+  admin_chat_heartbeat: [], admin_chat_purge: [],
 };
 let fault = null; // { fn, mode: 'drop' | 'commit-then-drop' | 'commit-then-hang', times }
 const calls = [];

@@ -79,6 +79,10 @@ export function Footer() {
             browser; your details are remembered only if you tick “Remember my details”.
           </p>
           <p className="mt-4 leading-relaxed">
+            If you use the live chat, your messages (and the name you type) are stored with the restaurant so staff can reply and keep a
+            record of the conversation for a limited time. A random chat key is kept in this browser so only you can see your own chat.
+          </p>
+          <p className="mt-4 leading-relaxed">
             <a className="inline-flex min-h-[40px] items-center underline hover:text-gold" href="track.html">My orders on this device</a>
           </p>
           <p className="mt-4 leading-relaxed">

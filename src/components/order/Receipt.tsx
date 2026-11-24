@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { PAYMENT_LABEL, STATUS_LABEL, type OrderJSON, type OrderStatus } from '../../lib/api';
 import { downloadReceiptPdf, fmtDateTime, printReceipt, receiptText, whenText } from '../../lib/receipt';
 import { asset, formatINR } from '../../utils/format';
-import { copyText, waTemplates, whatsappUrl } from '../../utils/order';
+import {copyText, waTemplates} from '../../utils/order';
+import { WhatsAppLink } from '../ui/WhatsAppLink';
 import { WhatsAppIcon } from '../ui/Bits';
 
 const STEPS: OrderStatus[] = ['pending', 'confirmed', 'preparing', 'ready', 'completed'];
@@ -207,9 +208,9 @@ export function ReceiptActions({ order, trackHref, onContinue }: { order: OrderJ
           </a>
         )}
       </div>
-      <a className="btn btn-emerald btn-sm w-full" href={whatsappUrl(waTemplates.orderSupport(order.bill_number))} target="_blank" rel="noopener noreferrer">
+      <WhatsAppLink className="btn btn-emerald btn-sm w-full" text={waTemplates.orderSupport(order.bill_number)}>
         <WhatsAppIcon /> Message the restaurant about this order (optional)
-      </a>
+      </WhatsAppLink>
       {onContinue && (
         <button type="button" className="btn btn-ghost w-full" onClick={onContinue}>
           Continue browsing

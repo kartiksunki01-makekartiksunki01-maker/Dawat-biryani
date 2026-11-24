@@ -1,7 +1,7 @@
 // Database test-suite for the V2 migration. Runs ONLY against a local/staging Postgres
 // (never production):   DATABASE_URL=postgres://... node tests/db/test_db.mjs
 import pg from 'pg';
-import { randomUUID, randomBytes } from 'node:crypto';
+import { randomUUID, randomBytes, createHash } from 'node:crypto';
 
 const URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:54329/dawat';
 if (/supabase\.(co|com)/.test(URL)) throw new Error('Refusing to run tests against Supabase production.');
@@ -284,6 +284,91 @@ check('Quoted bulk enquiry converts into a real order with a bill number', /^DBH
 check('A bulk enquiry cannot be converted twice', /already_converted/.test(errInfo(await admin(`select public.admin_convert_lead($1)`, [leadId]))));
 check('Old website direct lead insert still works', !(await anon(`insert into public.leads (kind, name, phone) values ('cart','Old site','9876543210')`)).error);
 check('Visitor cannot insert a lead with a quote amount', !!(await anon(`insert into public.leads (kind, name, quote_amount) values ('bulk','x', 1)`)).error);
+
+
+// ───────────────────────── live chat ─────────────────────────
+const sha = (t) => createHash('sha256').update(t).digest('hex');
+const chatSend = (who, p) => who('select public.chat_send($1::jsonb) as r', [JSON.stringify(p)]);
+const chatFetch = (who, p) => who('select public.chat_fetch($1::jsonb) as r', [JSON.stringify(p)]);
+const tokA = randomBytes(32).toString('hex'), tokB = randomBytes(32).toString('hex');
+const convA = randomUUID(), convB = randomUUID();
+await su(`update public.chat_settings set enabled=true, admin_online=false, admin_seen_at=null, retention_days=180 where id=1`);
+
+const st0 = await anon('select public.chat_status() as s');
+check('Chat status is public and says offline when the admin has not signed in', st0.rows?.[0]?.s?.enabled === true && st0.rows[0].s.online === false, errInfo(st0));
+const c1 = await chatSend(anon, { conversation_id: convA, token: tokA, body: 'Do you have mutton biryani today?', client_id: randomUUID(), name: 'Asha' });
+const msgs1 = c1.rows?.[0]?.r?.messages ?? [];
+check('Customer message stored; welcome + offline auto-replies added', msgs1.length === 3 && msgs1[0].kind === 'welcome' && msgs1[1].sender === 'customer' && msgs1[2].kind === 'offline', JSON.stringify(msgs1.map((m) => m.sender + '/' + m.kind)) + errInfo(c1));
+const cid1 = randomUUID();
+await chatSend(anon, { conversation_id: convA, token: tokA, body: 'Second message', client_id: cid1 });
+const cdup = await chatSend(anon, { conversation_id: convA, token: tokA, body: 'Second message', client_id: cid1 });
+check('Retrying the same message does not duplicate it', cdup.rows?.[0]?.r?.messages.filter((m) => m.body === 'Second message').length === 1, errInfo(cdup));
+check('Offline reply is sent once, not for every message', cdup.rows?.[0]?.r?.messages.filter((m) => m.kind === 'offline').length === 1);
+const cu = await su(`select admin_unread from public.chat_conversations where id=$1`, [convA]);
+check('Admin unread count = 2 (retry not counted)', cu.rows[0].admin_unread === 2, String(cu.rows[0].admin_unread));
+check('Exactly one notification for an unread streak (no spam)', (await su(`select count(*)::int n from public.notifications where conversation_id=$1`, [convA])).rows[0].n === 1);
+check('Only the SHA-256 of the token is stored', (await su(`select token_hash from public.chat_conversations where id=$1`, [convA])).rows[0].token_hash === sha(tokA));
+
+check('Another customer cannot read this conversation', /forbidden/.test(errInfo(await chatFetch(anon, { conversation_id: convA, token: tokB, mark_read: true }))));
+check('Another customer cannot post into it', /forbidden/.test(errInfo(await chatSend(anon, { conversation_id: convA, token: tokB, body: 'hi', client_id: randomUUID() }))));
+check('Unknown conversation just reports not_found', (await chatFetch(anon, { conversation_id: randomUUID(), token: tokA })).rows?.[0]?.r?.not_found === true);
+check('Short/forged token rejected', !!(await chatSend(anon, { conversation_id: convB, token: 'short', body: 'x', client_id: randomUUID() })).error);
+check('Empty and over-long messages rejected', !!(await chatSend(anon, { conversation_id: convA, token: tokA, body: '   ', client_id: randomUUID() })).error && !!(await chatSend(anon, { conversation_id: convA, token: tokA, body: 'x'.repeat(1001), client_id: randomUUID() })).error);
+
+for (const t of ['chat_conversations', 'chat_messages', 'chat_settings']) check(`Visitors cannot read ${t} directly`, !!(await anon(`select * from public.${t}`)).error);
+check('Visitors cannot insert chat messages directly', !!(await anon(`insert into public.chat_messages (conversation_id, sender, body) values ($1,'admin','fake')`, [convA])).error);
+check('Visitors cannot call admin chat functions', !!(await anon(`select public.admin_chat_reply($1::jsonb)`, [JSON.stringify({ conversation_id: convA, body: 'x', client_id: randomUUID() })])).error && !!(await anon(`select public.admin_chat_action($1::jsonb)`, [JSON.stringify({ conversation_id: convA, action: 'delete' })])).error);
+check('Non-admin signed-in user cannot read chats or reply', !!(await user(`select id from public.chat_conversations`)).error || (await user(`select id from public.chat_conversations`)).rowCount === 0);
+check('Non-admin signed-in user cannot reply', /forbidden/.test(errInfo(await user(`select public.admin_chat_reply($1::jsonb)`, [JSON.stringify({ conversation_id: convA, body: 'x', client_id: randomUUID() })]))));
+check('Admin can read the conversation list', (await admin(`select id, status, admin_unread from public.chat_conversations where id=$1`, [convA])).rows?.[0]?.admin_unread === 2);
+check('Admin cannot read the token hash or fingerprint', !!(await admin(`select token_hash from public.chat_conversations`)).error && !!(await admin(`select client_fp from public.chat_conversations`)).error);
+check('Admin can read messages', (await admin(`select count(*)::int n from public.chat_messages where conversation_id=$1`, [convA])).rows?.[0]?.n >= 4);
+
+const rid = randomUUID();
+const rp = await admin(`select public.admin_chat_reply($1::jsonb) as r`, [JSON.stringify({ conversation_id: convA, body: 'Yes, mutton biryani is ready!', client_id: rid })]);
+check('Admin reply stored', rp.rows?.[0]?.r?.duplicate === false, errInfo(rp));
+check('Admin reply retry is a no-op', (await admin(`select public.admin_chat_reply($1::jsonb) as r`, [JSON.stringify({ conversation_id: convA, body: 'Yes, mutton biryani is ready!', client_id: rid })])).rows?.[0]?.r?.duplicate === true);
+const peek = await chatFetch(anon, { conversation_id: convA, token: tokA, mark_read: false });
+check('Customer sees unread = 1 and the admin message', peek.rows?.[0]?.r?.unread === 1 && peek.rows[0].r.messages.some((m) => m.sender === 'admin'), errInfo(peek));
+const seen = await chatFetch(anon, { conversation_id: convA, token: tokA, mark_read: true });
+check('Opening the chat marks it read (unread → 0)', seen.rows?.[0]?.r?.unread === 0);
+check('Admin reply cleared the admin unread count', (await su(`select admin_unread from public.chat_conversations where id=$1`, [convA])).rows[0].admin_unread === 0);
+
+await admin(`select public.admin_chat_heartbeat()`);
+check('Heartbeat alone does not make chat "online" (admin must switch availability on)', (await anon('select public.chat_status() as s')).rows[0].s.online === false);
+await admin(`update public.chat_settings set admin_online = true where id = 1`);
+check('Online after admin turns availability on + heartbeat', (await anon('select public.chat_status() as s')).rows[0].s.online === true);
+await su(`update public.chat_settings set admin_seen_at = now() - interval '10 minutes' where id=1`);
+check('Goes offline automatically when the admin panel is closed (stale heartbeat)', (await anon('select public.chat_status() as s')).rows[0].s.online === false);
+await admin(`select public.admin_chat_heartbeat()`);
+const c2 = await chatSend(anon, { conversation_id: convB, token: tokB, body: 'Hello', client_id: randomUUID() });
+check('When online, no offline auto-reply is added', c2.rows?.[0]?.r?.messages.filter((m) => m.kind === 'offline').length === 0 && c2.rows[0].r.messages[0].kind === 'welcome', errInfo(c2));
+
+await admin(`select public.admin_chat_action($1::jsonb)`, [JSON.stringify({ conversation_id: convA, action: 'resolve' })]);
+check('Admin can mark resolved', (await su(`select status from public.chat_conversations where id=$1`, [convA])).rows[0].status === 'resolved');
+await admin(`select public.admin_chat_action($1::jsonb)`, [JSON.stringify({ conversation_id: convA, action: 'archive' })]);
+check('Admin can archive', (await su(`select status from public.chat_conversations where id=$1`, [convA])).rows[0].status === 'archived');
+await chatSend(anon, { conversation_id: convA, token: tokA, body: 'Are you there?', client_id: randomUUID() });
+check('A new customer message re-opens an archived conversation', (await su(`select status, admin_unread from public.chat_conversations where id=$1`, [convA])).rows[0].status === 'open');
+await admin(`select public.admin_chat_action($1::jsonb)`, [JSON.stringify({ conversation_id: convA, action: 'read' })]);
+check('Admin can mark read', (await su(`select admin_unread from public.chat_conversations where id=$1`, [convA])).rows[0].admin_unread === 0);
+
+await admin(`update public.chat_settings set enabled = false where id = 1`);
+check('Disabled chat refuses new messages with a clear reason', /chat_disabled/.test(errInfo(await chatSend(anon, { conversation_id: randomUUID(), token: randomBytes(32).toString('hex'), body: 'x', client_id: randomUUID() }))));
+await admin(`update public.chat_settings set enabled = true where id = 1`);
+check('Non-admin cannot change chat settings', (await user(`update public.chat_settings set enabled=false where id=1`)).rowCount === 0 || !!(await user(`update public.chat_settings set enabled=false where id=1`)).error);
+
+// rate limits
+const convR = randomUUID(), tokR = randomBytes(32).toString('hex'); let limited = false;
+for (let i = 0; i < 17; i++) { const r = await chatSend(anon, { conversation_id: convR, token: tokR, body: 'spam ' + i, client_id: randomUUID() }); if (r.error && /rate_limited/.test(r.error.message)) { limited = true; break; } }
+check('Message flooding is rate-limited', limited);
+
+// retention
+await su(`update public.chat_conversations set last_message_at = now() - interval '200 days' where id=$1`, [convB]);
+const pu = await admin(`select public.admin_chat_purge() as n`);
+check('Retention purge deletes conversations older than the policy (180 days) and their messages', pu.rows?.[0]?.n >= 1 && (await su(`select count(*)::int n from public.chat_messages where conversation_id=$1`, [convB])).rows[0].n === 0, errInfo(pu));
+check('Newer conversations survive the purge', (await su(`select count(*)::int n from public.chat_conversations where id=$1`, [convA])).rows[0].n === 1);
+check('Existing orders/customers/offers untouched by the chat migration', (await su(`select count(*)::int n from public.orders`)).rows[0].n > 0);
 
 console.log(`\n${pass}/${pass + fail} database checks passed`);
 await pool.end();

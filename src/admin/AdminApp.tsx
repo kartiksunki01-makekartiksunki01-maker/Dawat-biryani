@@ -1,7 +1,7 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import {
   BadgePercent, Bell, ChartColumn, ClipboardList, Inbox, LayoutDashboard, LogOut, Menu as MenuIcon, Music, Package, Palette,
-  ReceiptText, ShieldCheck, Store, Users, UtensilsCrossed, X,
+  ReceiptText, ShieldCheck, Store, Users, UtensilsCrossed, X, MessagesSquare,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { backendConfigured, createAdminClient } from '../lib/supabase';
@@ -11,6 +11,8 @@ import { Dashboard } from './sections/Dashboard';
 import { Orders } from './sections/Orders';
 import { Customers } from './sections/Customers';
 import { Offers } from './sections/Offers';
+import { LiveChat } from './sections/LiveChat';
+import { ChatProvider, useChatAdmin } from './chat';
 import { Dishes } from './Dishes';
 import { Bulk } from './sections/Bulk';
 import { Leads } from './Leads';
@@ -28,8 +30,9 @@ const SECTIONS = [
   { id: 'orders', label: 'Orders', icon: ClipboardList, el: <Orders /> },
   { id: 'customers', label: 'Customers', icon: Users, el: <Customers /> },
   { id: 'bills', label: 'Bills & Receipts', icon: ReceiptText, el: <Orders billsMode /> },
-  { id: 'offers', label: 'Offers & Discounts', icon: BadgePercent, el: <Offers /> },
+  { id: 'offers', label: 'Coupons & Discounts', icon: BadgePercent, el: <Offers /> },
   { id: 'menu', label: 'Menu Management', icon: UtensilsCrossed, el: <Dishes /> },
+  { id: 'chat', label: 'Live Chat', icon: MessagesSquare, el: <LiveChat /> },
   { id: 'bulk', label: 'Bulk Orders', icon: Package, el: <Bulk /> },
   { id: 'leads', label: 'Enquiries & Leads', icon: Inbox, el: <Leads /> },
   { id: 'notifications', label: 'Notifications', icon: Bell, el: <NotificationsPage /> },
@@ -136,6 +139,7 @@ function Shell({ sb, session }: { sb: SupabaseClient; session: Session }) {
   return (
     <AdminContext.Provider value={ctx}>
       <NotificationsProvider>
+        <ChatProvider>
         <div className="min-h-screen bg-smoke font-sans text-ivory">
           <a href="#admin-main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-gold focus:px-3 focus:py-2 focus:text-smoke">Skip to content</a>
           {/* mobile top bar */}
@@ -158,6 +162,7 @@ function Shell({ sb, session }: { sb: SupabaseClient; session: Session }) {
             </div>
           )}
         </div>
+        </ChatProvider>
       </NotificationsProvider>
     </AdminContext.Provider>
   );
@@ -175,6 +180,7 @@ function BellButton({ go }: { go: (s: string) => void }) {
 
 function Sidebar({ section, go, open, onClose, email, onSignOut }: { section: SectionId; go: (s: string) => void; open: boolean; onClose: () => void; email: string; onSignOut: () => void }) {
   const { unread, pendingOrders } = useNotifications();
+  const chatUnread = useChatAdmin().unread;
   const nav = (
     <nav aria-label="Admin sections" className="flex h-full flex-col">
       <div className="flex items-center justify-between gap-2 px-4 pb-4 pt-5">
@@ -190,7 +196,7 @@ function Sidebar({ section, go, open, onClose, email, onSignOut }: { section: Se
       <ul className="flex-1 space-y-0.5 overflow-y-auto px-2">
         {SECTIONS.map((s) => {
           const Icon = s.icon;
-          const count = s.id === 'notifications' ? unread : s.id === 'orders' ? pendingOrders : 0;
+          const count = s.id === 'notifications' ? unread : s.id === 'orders' ? pendingOrders : s.id === 'chat' ? chatUnread : 0;
           return (
             <li key={s.id}>
               <a

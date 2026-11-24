@@ -8,6 +8,7 @@ const KIND: Record<string, { label: string; go: string }> = {
   order_update: { label: 'Order update', go: 'orders' },
   new_bulk: { label: 'Bulk enquiry', go: 'bulk' },
   new_enquiry: { label: 'Enquiry', go: 'leads' },
+  new_chat: { label: 'Chat', go: 'chat' },
 };
 
 export function NotificationsPage() {

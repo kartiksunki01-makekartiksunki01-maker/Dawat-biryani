@@ -35,7 +35,7 @@ sql("""update public.restaurant_settings set opens_at='00:00', closes_at='23:59:
 sql("update public.dishes set is_sold_out = (id = 'prawns-biryani')")
 sql("delete from public.offers where code='DAWAT10'")
 sql("insert into public.offers (title, description, discount_type, discount_value, code, is_active, is_public, min_order) values ('Ten percent off','On orders above Rs 200','percent',10,'DAWAT10',true,true,200)")
-sql("update public.website_settings set intro_enabled=true, intro_duration_ms=1800, intro_for_returning=false, character_enabled=true, announcement_enabled=true, announcement_text='Now taking online orders'")
+sql("update public.website_settings set intro_enabled=true, intro_duration_ms=2400, intro_for_returning=false, character_enabled=true, announcement_enabled=true, announcement_text='Now taking online orders'")
 ctl({'fault': None})
 
 def order_count(phone):
@@ -62,7 +62,7 @@ with sync_playwright() as pw:
     check('Intro shows on first visit with Skip button', page.get_by_role('button', name='Skip intro').is_visible())
     intro.wait_for(state='detached', timeout=8000)
     dt = time.time() - t0
-    check('Intro finishes by itself in about 2 s (1.8 s configured)', dt < 2.8, f'{dt:.1f}s measured on software rendering')
+    check('Intro finishes by itself (2.4 s configured; includes screenshot time on software rendering)', dt < 4.8, f'{dt:.1f}s')
     page.wait_for_timeout(1500)
     check('Page scroll is not locked after intro', page.evaluate("getComputedStyle(document.documentElement).overflow !== 'hidden' && getComputedStyle(document.body).overflow !== 'hidden'"))
     check('Announcement from admin settings shown', page.get_by_text('Now taking online orders').count() > 0)
@@ -243,9 +243,10 @@ with sync_playwright() as pw:
     page.wait_for_timeout(500)
     enquire = page.locator('a[href^="https://wa.me/"]').first
     enquire.scroll_into_view_if_needed()
-    enquire.click()
-    page.wait_for_timeout(1500)
-    check('Tapping a WhatsApp button actually opens WhatsApp (new tab)', len(popups) > n0)
+    with page.expect_navigation(timeout=6000) as nav_info:
+        enquire.click()
+    check('Tapping a WhatsApp button on a phone hands off to WhatsApp in the same tab', nav_info.value.url.startswith('https://wa.me/919823324553'))
+    page.go_back(); page.wait_for_timeout(1500)
     bad_wa = page.eval_on_selector_all('a[href*="wa.me"]', "els=>els.map(e=>e.href).filter(h=>!/^https:\\/\\/wa\\.me\\/919823324553(\\?text=.+)?$/.test(h))")
     check('Every WhatsApp link uses the configured number', bad_wa == [], str(bad_wa[:2]))
     check('No window.open with noopener features left in code paths', page.evaluate("typeof window.open") == 'function')

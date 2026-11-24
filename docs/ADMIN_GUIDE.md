@@ -20,8 +20,8 @@ Bill number (jaise `DBH-20261124-0001`) apne aap banta hai, kabhi repeat nahi ho
 - **Add dish** → naam → phir price/photo bharo → "Show on website" on karo.
 - ⋮ (teen dots) se: chhupana, chef's special, archive, delete.
 
-## Offers & Discounts
-- **New offer** → title, % ya ₹, coupon code (ya khaali = automatic), minimum order, end date → "Active" on → **Save offer**.
+## Coupons & Discounts
+- **Create coupon** → title, % ya ₹, coupon code (ya khaali = automatic), minimum order, end date → "Active" on → **Save offer**.
 - Galat/expired coupon customer ko reason ke saath mana ho jata hai.
 - Jo offer use ho chuka hai wo delete nahi hota — archive karo.
 
@@ -55,3 +55,10 @@ Bill number (jaise `DBH-20261124-0001`) apne aap banta hai, kabhi repeat nahi ho
 ## Kuch gadbad ho to
 - Error message laal box mein aata hai — usme likha hota hai kya hua. Dobara try karo.
 - Internet chala gaya ho to "Network problem" aayega — kuch save nahi hua hota, dobara karo.
+
+## Live Chat (naya)
+- Sidebar → **Live Chat**. Upar "Available for chat" ON karo — tabhi website par "Online" dikhega (admin panel khula rehna chahiye).
+- Customer ka message aate hi list mein red number dikhta hai. Click karo → reply likho → Enter.
+- **Resolve** = kaam ho gaya, **Archive** = list se hata do. Customer dobara likhe to chat khud wapas khul jaati hai.
+- **Chat settings**: welcome message, offline message, chat widget on/off, chats kitne din rakhne hain.
+- Coupon: **Coupons & Discounts** → Create coupon → code (jaise DAWAT10), %, minimum order, last date, limit → Active ON → Save. "View usage" se dekho kisne use kiya.

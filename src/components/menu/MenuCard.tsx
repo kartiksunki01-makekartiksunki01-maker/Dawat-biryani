@@ -6,7 +6,8 @@ import type { MenuItem } from '../../data/types';
 import { useUI } from '../../stores/uiStore';
 import { offerLabel, offersForDish, useStorefront } from '../../data/menuSync';
 import { asset, formatINR } from '../../utils/format';
-import { enquireItemMessage, telUrl, whatsappUrl } from '../../utils/order';
+import {enquireItemMessage, telUrl} from '../../utils/order';
+import { WhatsAppLink } from '../ui/WhatsAppLink';
 import { ArchOutline, Tilt } from '../motion/Motion';
 import { DietMark, QtyStepper } from '../ui/Bits';
 import { useAddToOrder } from './useAddToOrder';
@@ -135,14 +136,9 @@ export function MenuCard({ item, index, ref }: { item: MenuItem; index: number; 
               <div className="mt-auto space-y-3">
                 <p className="text-sm text-gold">Price on enquiry</p>
                 <div className="grid grid-cols-2 gap-2">
-                  <a
-                    className="btn btn-emerald btn-sm"
-                    href={whatsappUrl(enquireItemMessage(item.name))}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
+                  <WhatsAppLink className="btn btn-emerald btn-sm" text={enquireItemMessage(item.name)}>
                     <MessageCircle size={16} /> Enquire
-                  </a>
+                  </WhatsAppLink>
                   <a className="btn btn-ghost btn-sm" href={telUrl}>
                     <Phone size={16} /> Call
                   </a>

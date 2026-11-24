@@ -7,7 +7,7 @@ import { useAdmin } from './ui';
 
 export interface Notif {
   id: string;
-  kind: 'new_order' | 'order_update' | 'new_bulk' | 'new_enquiry';
+  kind: 'new_order' | 'order_update' | 'new_bulk' | 'new_enquiry' | 'new_chat';
   title: string;
   body: string;
   order_id: string | null;
