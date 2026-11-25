@@ -63,8 +63,8 @@ export function Toggle({ checked, onChange, label, hint, disabled }: { checked: 
         <span className="block text-sm text-ivory">{label}</span>
         {hint && <span className="block text-[11px] text-ivory/50">{hint}</span>}
       </span>
-      <input type="checkbox" role="switch" className="peer sr-only" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
-      <span className="relative h-6 w-11 shrink-0 rounded-full bg-white/15 transition peer-checked:bg-gold peer-focus-visible:ring-2 peer-focus-visible:ring-saffron after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-ivory after:transition peer-checked:after:translate-x-5" aria-hidden />
+      <input type="checkbox" role="switch" className="sr-only" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+      <span className="royal-switch" aria-hidden />
     </label>
   );
 }

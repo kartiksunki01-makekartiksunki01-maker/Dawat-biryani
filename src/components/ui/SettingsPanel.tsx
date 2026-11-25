@@ -1,29 +1,26 @@
 import { useCart } from '../../stores/cartStore';
 import { useMyOrders } from '../../lib/myOrders';
 import { motion } from 'framer-motion';
+import { Music2, Sparkles, Volume1, Volume2, VolumeX, X, type LucideIcon } from 'lucide-react';
 import { useEffect, useRef } from 'react';
-import { useQuality, useSettings, useUI, type QualityMode } from '../../stores/uiStore';
+import { useSettings, useUI } from '../../stores/uiStore';
 import { sound } from '../../utils/sound';
 
-const MODES: { id: QualityMode; label: string }[] = [
-  { id: 'auto', label: 'Auto' },
-  { id: 'high', label: 'High' },
-  { id: 'medium', label: 'Medium' },
-  { id: 'low', label: 'Low' },
-];
-
-function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint?: string }) {
+/** Premium royal switch row (gold track, ivory pearl thumb). */
+function Toggle({ checked, onChange, label, hint, icon: Icon, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint?: string; icon?: LucideIcon; disabled?: boolean }) {
   return (
-    <label className="flex min-h-[44px] cursor-pointer items-center justify-between gap-4">
-      <span>
-        <span className="block text-sm text-ivory">{label}</span>
-        {hint && <span className="block text-xs text-ivory/50">{hint}</span>}
+    <label className={`royal-row flex min-h-[56px] items-center gap-3 rounded-2xl px-3 py-2 ${disabled ? 'opacity-45' : 'cursor-pointer'}`}>
+      {Icon && (
+        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ring-1 transition-colors duration-300 ${checked && !disabled ? 'bg-gold/15 text-gold ring-gold/40' : 'bg-ivory/5 text-ivory/45 ring-ivory/10'}`} aria-hidden>
+          <Icon size={16} />
+        </span>
+      )}
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium text-ivory">{label}</span>
+        {hint && <span className="block truncate text-[11px] text-ivory/50">{hint}</span>}
       </span>
-      <span className="relative">
-        <input type="checkbox" className="peer sr-only" checked={checked} onChange={(e) => onChange(e.target.checked)} />
-        <span className="block h-6 w-11 rounded-full bg-ivory/15 transition peer-checked:bg-gold/80 peer-focus-visible:ring-2 peer-focus-visible:ring-saffron" />
-        <span className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-ivory shadow transition peer-checked:translate-x-5" />
-      </span>
+      <input type="checkbox" role="switch" className="sr-only" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+      <span className="royal-switch" aria-hidden />
     </label>
   );
 }
@@ -31,7 +28,6 @@ function Toggle({ checked, onChange, label, hint }: { checked: boolean; onChange
 export function SettingsPanel({ onClose }: { onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const s = useSettings();
-  const effective = useQuality();
 
   useEffect(() => {
     const onDown = (e: PointerEvent) => {
@@ -46,74 +42,66 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
     };
   }, [onClose]);
 
+  const VolIcon = !s.soundOn || s.volume === 0 ? VolumeX : s.volume < 0.5 ? Volume1 : Volume2;
+
   return (
     <motion.div
       ref={ref}
       id="settings-panel"
       role="dialog"
       aria-label="Experience settings"
-      className="glass absolute right-0 top-14 w-[min(86vw,320px)] rounded-3xl p-5 text-left"
+      className="royal-panel absolute right-0 top-14 w-[min(90vw,340px)] overflow-hidden rounded-[1.75rem] text-left"
       initial={{ opacity: 0, y: -8, scale: 0.97 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -8, scale: 0.97 }}
       transition={{ duration: 0.25 }}
     >
-      <fieldset>
-        <legend className="t-eyebrow text-gold">Graphics quality</legend>
-        <div className="mt-3 grid grid-cols-4 gap-1 rounded-full bg-ivory/5 p-1 ring-1 ring-gold/20">
-          {MODES.map((m) => (
-            <label key={m.id} className="relative">
-              <input
-                type="radio"
-                name="quality"
-                className="peer sr-only"
-                checked={s.qualityMode === m.id}
-                onChange={() => s.setQualityMode(m.id)}
-              />
-              <span className="grid min-h-[40px] cursor-pointer place-items-center rounded-full text-xs text-ivory/70 transition peer-checked:bg-gold peer-checked:font-semibold peer-checked:text-clove peer-focus-visible:ring-2 peer-focus-visible:ring-saffron">
-                {m.label}
-              </span>
-            </label>
-          ))}
+      <div className="flex items-center justify-between border-b border-gold/15 px-5 pb-3 pt-4">
+        <div>
+          <p className="t-eyebrow text-gold">Experience</p>
+          <p className="mt-0.5 font-display text-lg text-ivory">Sound &amp; preferences</p>
         </div>
-        <p className="mt-2 text-xs text-ivory/50">
-          Rendering at <span className="capitalize text-ivory/80">{effective}</span>
-          {s.qualityMode === 'auto' && ' — adjusts automatically if frames drop.'}
-        </p>
-      </fieldset>
+        <button type="button" onClick={onClose} className="grid h-10 w-10 place-items-center rounded-full text-ivory/60 ring-1 ring-ivory/10 transition hover:bg-ivory/10 hover:text-ivory" aria-label="Close settings">
+          <X size={16} />
+        </button>
+      </div>
 
-      <div className="hairline my-4" />
-
-      <div className="space-y-1">
+      <div className="space-y-1 p-3">
         <Toggle
           label="Sound"
-          hint="Background music & effects (starts with your first tap)"
+          hint="Music & effects"
+          icon={Volume2}
           checked={s.soundOn}
           onChange={async (v) => {
             s.setSoundOn(v);
             await sound.setEnabled(v);
           }}
         />
-        <label className="flex items-center gap-3 py-1 text-xs text-ivory/60">
-          Volume
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.05}
-            value={s.volume}
-            onChange={(e) => {
-              const v = Number(e.target.value);
-              s.setVolume(v);
-              sound.setVolume(v);
-            }}
-            className="gold-range flex-1"
-            style={{ ['--fill' as string]: `${s.volume * 100}%` }}
-            aria-label="Volume"
-          />
-        </label>
-        <Toggle label="Background music" hint={sound.hasUploadedTrack ? 'Restaurant’s music' : '“Saffron and Gold”'} checked={s.musicOn} onChange={s.setMusicOn} />
-        <Toggle label="Sound effects" hint="Taps, chimes" checked={s.sfxOn} onChange={s.setSfxOn} />
+        <div className={`rounded-2xl px-3 py-1 transition-opacity ${s.soundOn ? '' : 'opacity-45'}`}>
+          <label className="flex items-center gap-3 text-xs text-ivory/60">
+            <VolIcon size={16} className="shrink-0 text-gold/80" aria-hidden />
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={s.volume}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                s.setVolume(v);
+                sound.setVolume(v);
+              }}
+              className="gold-range flex-1"
+              style={{ ['--fill' as string]: `${s.volume * 100}%` }}
+              aria-label="Volume"
+            />
+            <span className="w-9 text-right font-num tabular-nums text-ivory/70">{Math.round(s.volume * 100)}%</span>
+          </label>
+        </div>
+        <Toggle label="Background music" hint={sound.hasUploadedTrack ? 'Restaurant’s music' : '“Saffron and Gold”'} icon={Music2} checked={s.musicOn} disabled={!s.soundOn} onChange={s.setMusicOn} />
+        <Toggle label="Sound effects" hint="Taps & chimes" icon={Sparkles} checked={s.sfxOn} disabled={!s.soundOn} onChange={s.setSfxOn} />
+      </div>
+      <div className="px-5 pb-5">
         <YourData />
       </div>
     </motion.div>
@@ -130,19 +118,20 @@ function YourData() {
   const forgetAll = useMyOrders((o) => o.forgetAll);
   const showToast = useUI((u) => u.showToast);
   return (
-    <div className="mt-3 space-y-2 border-t border-gold/15 pt-3 text-xs text-ivory/70">
+    <div className="space-y-2 border-t border-gold/15 pt-4 text-xs text-ivory/70">
       <p className="t-eyebrow text-gold">Your data on this device</p>
-      <a className="flex min-h-[40px] items-center underline hover:text-gold" href="track.html">
-        View my orders ({orders.length})
+      <a className="royal-chip royal-chip-gold w-full justify-between" href="track.html">
+        <span>View my orders</span>
+        <span className="rounded-full bg-black/25 px-2 py-0.5 font-num tabular-nums">{orders.length}</span>
       </a>
-      <div className="flex flex-wrap gap-x-4 gap-y-1">
-        <button type="button" className="min-h-[40px] underline disabled:opacity-40" disabled={!remember} onClick={() => { forgetDetails(); showToast('Saved details removed.'); }}>
+      <div className="flex flex-wrap gap-1.5">
+        <button type="button" className="royal-chip" disabled={!remember} onClick={() => { forgetDetails(); showToast('Saved details removed.'); }}>
           Forget my saved details
         </button>
-        <button type="button" className="min-h-[40px] underline disabled:opacity-40" disabled={!lines.length} onClick={() => { clear(); showToast('Cart cleared.'); }}>
+        <button type="button" className="royal-chip" disabled={!lines.length} onClick={() => { clear(); showToast('Cart cleared.'); }}>
           Clear cart
         </button>
-        <button type="button" className="min-h-[40px] underline disabled:opacity-40" disabled={!orders.length} onClick={() => { forgetAll(); showToast('Order links removed from this device.'); }}>
+        <button type="button" className="royal-chip" disabled={!orders.length} onClick={() => { forgetAll(); showToast('Order links removed from this device.'); }}>
           Forget order links
         </button>
       </div>

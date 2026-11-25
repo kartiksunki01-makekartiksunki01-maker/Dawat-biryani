@@ -137,11 +137,9 @@ with sync_playwright() as p:
     check('Bulk enquiry saved and confirmed by the server', form.get_by_role('link', name=re.compile('Also send on WhatsApp')).get_attribute('href').startswith('https://wa.me/919766888897?text='))
     page.screenshot(path=OUT+'final_desktop_bulk.png')
 
-    # Settings: quality
+    # Settings: sound panel (graphics quality removed with the 3D story)
     page.get_by_role('button', name='Experience settings').click(); time.sleep(0.5)
-    page.locator('#settings-panel label', has_text='Low').click(); time.sleep(0.3)
-    check('Quality switch to Low', 'low' in page.locator('#settings-panel').inner_text().lower())
-    page.locator('#settings-panel label', has_text='Auto').click()
+    check('Settings panel shows the royal sound switches', page.locator('#settings-panel .royal-switch').count() == 3 and 'Graphics quality' not in page.locator('#settings-panel').inner_text())
     page.keyboard.press('Escape')
 
     # Live chat (replaced Ask Anna)

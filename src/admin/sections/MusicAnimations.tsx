@@ -11,7 +11,7 @@ export function MusicAnimations() {
   const d = s.draft;
   return (
     <section aria-label="Music and animations">
-      <PageHeader title="Music & Animations" intro="Background music always starts muted — visitors switch sound on themselves (browsers require it)."
+      <PageHeader title="Music & Animations" intro="Background music starts with each visitor’s first tap (browsers block sound before that); visitors can mute it any time."
         actions={<Btn tone="gold" disabled={!s.dirty} busy={s.busy} onClick={() => void s.save()}>Save changes</Btn>} />
       {s.err && <Notice kind="err">{s.err}</Notice>}
       {!d ? <Skeleton rows={3} /> : (
