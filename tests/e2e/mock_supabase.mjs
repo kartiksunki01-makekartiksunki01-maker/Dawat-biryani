@@ -5,6 +5,7 @@
 import http from 'node:http';
 import pg from 'pg';
 import { handleRest, makeJwt, readJwt } from './mock_rest.mjs';
+import { attachRealtime } from './mock_realtime.mjs';
 
 const URL = process.env.DATABASE_URL ?? 'postgres://postgres:postgres@localhost:54329/dawat';
 if (/supabase\.(co|com)/.test(URL)) throw new Error('Never point the mock at production.');
@@ -64,7 +65,8 @@ function session(user) {
   };
 }
 
-http
+let rt = { connections: 0, broadcasts: 0, changes: 0 };
+const server = http
   .createServer(async (req, res) => {
     if (req.method === 'OPTIONS') return send(res, 204);
     let raw = '';
@@ -77,7 +79,7 @@ http
       if (b.sql) {
         try { const r = await pool.query(b.sql); return send(res, 200, { rows: r.rows }); } catch (e) { return send(res, 400, { error: e.message }); }
       }
-      return send(res, 200, { ok: true, calls: calls.splice(0) });
+      return send(res, 200, { ok: true, calls: calls.splice(0), realtime: rt });
     }
 
     // ── auth ──
@@ -146,4 +148,6 @@ http
     }
     return send(res, 404, { message: 'not in this mock' });
   })
-  .listen(PORT, () => console.log(`mock supabase on ${PORT}`));
+  ;
+if (process.env.NO_REALTIME !== '1') rt = await attachRealtime(server, URL);
+server.listen(PORT, () => console.log(`mock supabase on ${PORT}${process.env.NO_REALTIME === '1' ? ' (realtime OFF)' : ' + realtime'}`));

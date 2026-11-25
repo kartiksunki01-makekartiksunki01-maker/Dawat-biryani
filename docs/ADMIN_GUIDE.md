@@ -39,13 +39,12 @@ Bill number (jaise `DBH-20261124-0001`) apne aap banta hai, kabhi repeat nahi ho
 ## Settings (Restaurant Settings)
 - **Accept online orders** off = ordering band (customer ko "call karo" dikhega).
 - Pickup/Delivery, delivery charge, free delivery above, minimum order, khulne-band hone ka time, chhutti ke din, special closing dates.
-- WhatsApp number confirm ho jaye to "confirmed" on karo.
+- WhatsApp number abhi **+91 97668 88897** hai (owner ne confirm kiya). Badalna ho to yahin digits likho, country code ke saath (jaise 919766888897) → Save. Website ke saare WhatsApp buttons turant naye number par chalenge.
 - Tax/GST tabhi on karo jab accountant bole. Jhootha GSTIN kabhi mat daalo.
 
 ## Website Appearance / Music & Animations
 - Announcement banner (jaise "25 Dec ko band").
-- Dawat Anna on/off aur uske messages.
-- Music upload (sirf apna ya licensed music), volume, intro on/off aur time (1–3 sec). "Preview intro" se dekh lo.
+- Music upload (sirf apna ya licensed music), volume, intro on/off aur time (2–3 sec). Intro ab sirf logo wala hai; ek baar dekhne ya "Skip" karne ke baad us session mein dobara nahi aata. "Preview intro" se dekh lo.
 
 ## Account & Security
 - Password badlo (10+ characters).
@@ -57,8 +56,10 @@ Bill number (jaise `DBH-20261124-0001`) apne aap banta hai, kabhi repeat nahi ho
 - Internet chala gaya ho to "Network problem" aayega — kuch save nahi hua hota, dobara karo.
 
 ## Live Chat (naya)
-- Sidebar → **Live Chat**. Upar "Available for chat" ON karo — tabhi website par "Online" dikhega (admin panel khula rehna chahiye).
+- Sidebar → **Live Chat**. Upar "Available for chat" ON karo — tabhi website par "Online" dikhega (admin panel khula rehna chahiye; panel band karne ke 5 minute baad website khud "Offline" dikhati hai).
+- Messages turant aate-jaate hain (live). Upar "Live updates connected." likha ho to sab theek hai.
 - Customer ka message aate hi list mein red number dikhta hai. Click karo → reply likho → Enter.
 - **Resolve** = kaam ho gaya, **Archive** = list se hata do. Customer dobara likhe to chat khud wapas khul jaati hai.
 - **Chat settings**: welcome message, offline message, chat widget on/off, chats kitne din rakhne hain.
-- Coupon: **Coupons & Discounts** → Create coupon → code (jaise DAWAT10), %, minimum order, last date, limit → Active ON → Save. "View usage" se dekho kisne use kiya.
+- Coupon: **Coupons & Discounts** → Create coupon → code (jaise DAWAT10), % ya ₹, minimum order, maximum discount, last date, total limit / ek phone kitni baar → Active ON → Save. "View usage" se dekho kis bill par use hua.
+- Jo coupon ek baar bhi use ho chuka hai wo **delete nahi hota, archive hota hai** — taaki purane bills sahi rahein.

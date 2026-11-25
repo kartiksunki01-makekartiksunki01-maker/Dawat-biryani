@@ -88,12 +88,15 @@ export const waNumber = () => {
 };
 
 /**
- * Always used as a plain <a href target="_blank"> started by the customer's own tap —
- * never window.open(…, 'noopener') which Chrome blocks silently.
+ * Click-to-chat link. Used only as a real <a href> tapped by the customer (see WhatsAppLink):
+ * same tab on phones/tablets (in-app browsers ignore new-tab links), new tab on desktop.
+ * Never window.open(…, 'noopener'), which Chrome blocks silently.
  */
 export const whatsappUrl = (text: string) => `https://wa.me/${waNumber()}?text=${encodeURIComponent(text)}`;
 /** WhatsApp Web (desktop browsers / devices without the app). */
 export const whatsappWebUrl = (text: string) => `https://web.whatsapp.com/send?phone=${waNumber()}&text=${encodeURIComponent(text)}`;
+/** Direct app scheme (only offered in the fallback panel on phones; does nothing if the app is missing). */
+export const whatsappAppUrl = (text: string) => `whatsapp://send?phone=${waNumber()}&text=${encodeURIComponent(text)}`;
 export const waDisplayNumber = () => `+${waNumber()}`;
 export const isMobileUA = () => /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
 

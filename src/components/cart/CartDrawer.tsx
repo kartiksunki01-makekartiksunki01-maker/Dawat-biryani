@@ -628,9 +628,9 @@ export function CartDrawer() {
             <div aria-live="polite" className="mt-1 min-h-[1.1rem] text-xs">
               {details.coupon && quoteState === 'loading' && <span className="text-ivory/60">Checking {details.coupon}…</span>}
               {details.coupon && quoteState !== 'loading' && quote && (
-                quote.discount > 0
-                  ? <span className="text-emerald-300">✓ {details.coupon} applied — you save {formatINR(quote.discount)}</span>
-                  : <span className="text-red-300">{quote.issues.find((i) => i.code === 'coupon_invalid')?.message ?? 'This coupon can’t be applied to this order.'}</span>
+                quote.offer?.code === details.coupon && quote.discount > 0
+                  ? <span className="text-emerald-300" data-testid="cart-coupon-ok">✓ {details.coupon} applied — you save {formatINR(quote.discount)}</span>
+                  : <span className="text-red-300" data-testid="cart-coupon-err">{quote.issues.find((i) => i.code === 'coupon_invalid')?.message ?? `${details.coupon} can’t be used on this order${quote.discount > 0 ? ' — a better offer is already applied' : ''}.`}</span>
               )}
             </div>
           </div>

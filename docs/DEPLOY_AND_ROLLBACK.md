@@ -3,8 +3,9 @@
 ## Where things are
 - `main` branch → the live site (https://dawat-biryani.vercel.app). Vercel deploys every push to `main`.
 - `v2` branch → V2 preview. Vercel builds a **Preview** link for it automatically.
-- `backup/pre-v2-2026-11-24` → exact copy of the site before V2.
-- Database: Supabase project `mbnkkhwxpxjbhgfslerb`. V2 migrations are already applied there. They only **add** tables, columns and functions, so the old live site keeps working.
+- `backup/pre-v2-2026-11-24` → exact copy of the live site before V2.
+- `backup/pre-v3-fixes-2026-11-25` → the `v2` preview just before the V3 fixes (WhatsApp, coupons, intro, live chat).
+- Database: Supabase project `mbnkkhwxpxjbhgfslerb`. V2 and V3 migrations are already applied there (`dawat_v2_ordering`, `dawat_v2_1_hardening`, `dawat_v3_settings`, `dawat_v3_chat_coupons`). They only **add** tables, columns and functions, so the old live site keeps working.
 
 ## 1. Test the preview (before going live)
 1. Vercel → project **dawat-biryani** → **Deployments** → the newest one from branch `v2` → **Visit**.
@@ -22,7 +23,8 @@ Vercel then deploys the live site in 1–2 minutes. Environment variables stay t
 - Or code: GitHub → revert the merge commit (or reset `main` to `backup/pre-v2-2026-11-24`).
 - Database: nothing needs to be undone for a code rollback — the old site ignores the new tables.
   To stop new online orders immediately without any code change: Admin → Restaurant Settings → switch off **Accept online orders**.
-- Never drop the new tables: they hold orders and bills.
+- Never drop the new tables: they hold orders, bills and chat history.
+- To turn off live chat without code: Admin → Live Chat → Chat settings → switch off the widget.
 
 ## Environment variables (Vercel → Settings → Environment Variables)
 | Name | Value |

@@ -3,7 +3,7 @@ import { useMyOrders } from '../../lib/myOrders';
 import { motion } from 'framer-motion';
 import { useEffect, useRef } from 'react';
 import { useQuality, useSettings, useUI, type QualityMode } from '../../stores/uiStore';
-import { sound, stopSpeaking } from '../../utils/sound';
+import { sound } from '../../utils/sound';
 
 const MODES: { id: QualityMode; label: string }[] = [
   { id: 'auto', label: 'Auto' },
@@ -114,16 +114,6 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
         </label>
         <Toggle label="Background music" hint={sound.hasUploadedTrack ? 'Restaurant’s music' : 'Soft built-in ambience'} checked={s.musicOn} onChange={s.setMusicOn} />
         <Toggle label="Sound effects" hint="Taps, chimes" checked={s.sfxOn} onChange={s.setSfxOn} />
-        <Toggle
-          label="Anna’s voice"
-          hint="Spoken dialogue with on-screen captions"
-          checked={s.voiceOn}
-          onChange={(v) => {
-            s.setVoiceOn(v);
-            if (!v) stopSpeaking();
-          }}
-        />
-        <Toggle label="Show Dawat Anna" hint="Your virtual host" checked={s.hostVisible} onChange={s.setHostVisible} />
         <YourData />
       </div>
     </motion.div>
@@ -154,9 +144,6 @@ function YourData() {
         </button>
         <button type="button" className="min-h-[40px] underline disabled:opacity-40" disabled={!orders.length} onClick={() => { forgetAll(); showToast('Order links removed from this device.'); }}>
           Forget order links
-        </button>
-        <button type="button" className="min-h-[40px] underline" onClick={() => { try { localStorage.removeItem('dawat-host-seen-v2'); sessionStorage.removeItem('dawat-host-session-v2'); } catch { /* ignore */ } showToast('Anna’s tips will show again.'); }}>
-          Reset Anna’s tips
         </button>
       </div>
     </div>

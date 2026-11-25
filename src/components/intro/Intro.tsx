@@ -96,8 +96,8 @@ function IntroRun() {
           role="dialog"
           aria-label={`${restaurant.name} — intro`}
           className="fixed inset-0 z-[100] overflow-hidden bg-smoke"
-          exit={{ opacity: 0, scale: 1.03 }}
-          transition={{ duration: exitS, ease }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: exitS * 0.6, delay: exitS * 0.4, ease }}
         >
           {/* deep royal-maroon backdrop with a soft golden light behind the logo */}
           <div className="absolute inset-0" style={{ background: 'radial-gradient(70% 55% at 50% 48%, #3a0f1a 0%, #1c0810 55%, #0b0306 100%)' }} aria-hidden />
@@ -116,7 +116,12 @@ function IntroRun() {
             ))}
           </div>
 
-          <div className="relative flex h-full flex-col items-center justify-center px-6 text-center">
+          {/* the logo and words leave first, then the backdrop dissolves into the homepage (no overlapping text) */}
+          <motion.div
+            className="relative flex h-full flex-col items-center justify-center px-6 text-center"
+            exit={{ opacity: 0, scale: 1.04 }}
+            transition={{ duration: exitS * 0.5, ease }}
+          >
             <motion.div
               className="relative"
               initial={{ opacity: 0, scale: 0.9 }}
@@ -159,7 +164,7 @@ function IntroRun() {
             >
               {restaurant.tagline}
             </motion.p>
-          </div>
+          </motion.div>
 
           <button type="button" onClick={finish} className="btn btn-ghost absolute right-4 top-4 z-10 min-h-[44px] px-5 sm:right-8 sm:top-8" aria-label="Skip intro">
             Skip intro

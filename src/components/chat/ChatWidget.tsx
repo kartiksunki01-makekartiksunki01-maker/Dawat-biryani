@@ -5,7 +5,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { ApiError } from '../../lib/api';
 import { chatFetch, chatSend, chatStatus, newChatSecrets, newClientId, type ChatMsg, type ChatStatus } from '../../lib/chatApi';
-import { backendConfigured } from '../../lib/supabase';
+import { backendConfigured, publicClient } from '../../lib/supabase';
 import { useUI } from '../../stores/uiStore';
 import { restaurant } from '../../data/restaurant';
 import { asset } from '../../utils/format';
@@ -47,6 +47,11 @@ export function ChatWidget() {
   const stick = useRef(true);
   const inflight = useRef(0); // sends in progress — polling must not react to a conversation that is still being created
   const readingNow = open && !collapsed && visible;
+  const [pushOk, setPushOk] = useState(false); // Realtime push connected for this conversation
+  const [peek, setPeek] = useState<ChatMsg | null>(null); // short preview of a new reply while the window is closed
+  const readingRef = useRef(readingNow);
+  readingRef.current = readingNow;
+  const seenIds = useRef<Set<string> | null>(null);
 
   // availability + enabled flag (also tells us whether to render at all)
   useEffect(() => {
@@ -65,13 +70,21 @@ export function ChatWidget() {
   }, []);
 
   const apply = useCallback((s: { messages: ChatMsg[]; unread: number; online: boolean }) => {
+    // a reply that arrived while the customer was not looking → small preview above the chat button
+    const known = seenIds.current;
+    if (known && !readingRef.current) {
+      const fresh = s.messages.filter((m) => m.sender === 'admin' && !known.has(m.id));
+      if (fresh.length) setPeek(fresh[fresh.length - 1]);
+    }
+    seenIds.current = new Set(s.messages.map((m) => m.id));
     setMsgs(s.messages);
     setUnread(s.unread);
     setOnline(s.online);
     setPending((p) => p.filter((x) => !s.messages.some((m) => m.cid === x.cid)));
   }, []);
 
-  // conversation sync: 3 s while the window is open, 15 s as a closed-window unread check, paused when the tab is hidden
+  // conversation sync. Replies are PUSHED (Supabase Realtime broadcast "changed" on chat:<id>, sent by the database);
+  // polling is only a safety net: 20 s / 60 s while push is connected, 4 s / 20 s if it is not. Paused in hidden tabs.
   const sync = useCallback(async () => {
     if (!id || !token || inflight.current > 0) return;
     try {
@@ -85,12 +98,40 @@ export function ChatWidget() {
     }
   }, [id, token, readingNow, apply, reset]);
 
+  const syncRef = useRef(sync);
+  syncRef.current = sync;
+
   useEffect(() => {
     if (!id || !visible || !status?.enabled) return;
     void sync();
-    const t = window.setInterval(() => void sync(), open && !collapsed ? 3000 : 15000);
+    const reading = open && !collapsed;
+    const t = window.setInterval(() => void sync(), pushOk ? (reading ? 20000 : 60000) : (reading ? 4000 : 20000));
     return () => window.clearInterval(t);
-  }, [id, visible, open, collapsed, sync, status?.enabled]);
+  }, [id, visible, open, collapsed, sync, status?.enabled, pushOk]);
+
+  // real-time push: a content-free ping tells this device to re-read its conversation (with its secret token)
+  useEffect(() => {
+    if (!id || !publicClient || !status?.enabled) return;
+    let debounce: number | undefined;
+    const ch = publicClient
+      .channel(`chat:${id}`)
+      .on('broadcast', { event: 'changed' }, () => { window.clearTimeout(debounce); debounce = window.setTimeout(() => void syncRef.current(), 120); })
+      .subscribe((st) => setPushOk(st === 'SUBSCRIBED'));
+    return () => { window.clearTimeout(debounce); setPushOk(false); void publicClient?.removeChannel(ch); };
+  }, [id, status?.enabled]);
+
+  // unread count in the browser tab title while the customer is elsewhere
+  const baseTitle = useRef(document.title);
+  useEffect(() => {
+    document.title = unread > 0 ? `(${unread}) New message · ${baseTitle.current}` : baseTitle.current;
+  }, [unread]);
+  useEffect(() => () => { document.title = baseTitle.current; }, []);
+  useEffect(() => {
+    if (!peek) return;
+    const t = window.setTimeout(() => setPeek(null), 8000);
+    return () => window.clearTimeout(t);
+  }, [peek]);
+  useEffect(() => { if (open) setPeek(null); }, [open]);
 
   // auto-scroll to the newest message (unless the visitor scrolled up to read)
   useEffect(() => {
@@ -232,6 +273,24 @@ export function ChatWidget() {
         )}
       </AnimatePresence>
 
+      <AnimatePresence>
+        {!open && peek && (
+          <motion.button
+            key={peek.id}
+            type="button"
+            onClick={() => { setOpen(true); setCollapsed(false); setPeek(null); }}
+            className="pointer-events-auto mb-2 max-w-[min(280px,calc(100vw-1.5rem))] rounded-2xl rounded-br-sm border border-gold/40 bg-[#1a0d10] px-3.5 py-2.5 text-left text-ivory shadow-[0_12px_40px_rgba(0,0,0,0.55)]"
+            initial={{ opacity: 0, y: 8, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 6 }}
+            transition={{ duration: 0.25, ease }}
+            data-testid="chat-peek"
+          >
+            <span className="block text-[11px] font-semibold uppercase tracking-wider text-gold">New reply · {restaurant.name.split(' ')[0]}</span>
+            <span className="mt-0.5 line-clamp-2 block text-sm">{peek.body}</span>
+          </motion.button>
+        )}
+      </AnimatePresence>
       {!open && (
         <motion.button
           type="button"

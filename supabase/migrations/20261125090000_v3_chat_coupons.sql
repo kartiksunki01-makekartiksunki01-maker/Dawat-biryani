@@ -1,7 +1,8 @@
 -- ════════════════════════════════════════════════════════════════════════════
---  Dawat Biryani House — V3: live customer ↔ admin chat.
---  ADDITIVE: new tables/functions only. The only change to an existing object is that the
---  notifications.kind CHECK is widened (adds 'new_chat') and a nullable column is added. No data is touched.
+--  Dawat Biryani House — V3: live customer ↔ admin chat + coupon safety.
+--  ADDITIVE: new tables/functions/triggers only. Changes to existing objects: the notifications.kind CHECK is
+--  widened (adds 'new_chat'), one nullable column is added to notifications, and a trigger stops a USED coupon
+--  from being hard-deleted (it must be archived, so old bills stay explained). No existing data is touched.
 --  Customer identity = a random secret token kept on the customer's device; only its SHA-256 is stored.
 --  Customers can reach ONLY their own conversation through SECURITY DEFINER functions (no table grants to anon).
 -- ════════════════════════════════════════════════════════════════════════════
@@ -238,15 +239,45 @@ grant execute on function public.chat_status(), public.chat_send(jsonb), public.
 revoke all on function public.admin_chat_reply(jsonb), public.admin_chat_action(jsonb), public.admin_chat_heartbeat(), public.admin_chat_purge() from public, anon;
 grant execute on function public.admin_chat_reply(jsonb), public.admin_chat_action(jsonb), public.admin_chat_heartbeat(), public.admin_chat_purge() to authenticated;
 
--- ───────────────────────── realtime (admin dashboard) ─────────────────────────
+-- ───────────────────────── realtime ─────────────────────────
+-- Admin dashboard: Postgres Changes on chat_messages (RLS: admins only). chat_conversations is NOT published
+-- (it has column-level grants; the admin panel reloads the list whenever a message event arrives).
 do $$
 begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
     if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'chat_messages') then
       alter publication supabase_realtime add table public.chat_messages;
     end if;
-    if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'chat_conversations') then
-      alter publication supabase_realtime add table public.chat_conversations;
-    end if;
   end if;
 end $$;
+
+-- Customer widget: when the restaurant (or the auto-reply) writes into a conversation, a content-free
+-- "changed" ping is broadcast on the public topic chat:<conversation id>. The widget then re-reads the
+-- conversation through chat_fetch with its secret token, so the ping itself reveals nothing. If Realtime is
+-- unavailable the insert still succeeds (the ping is best-effort) and the widget's polling delivers the reply.
+create or replace function public._chat_after_message() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if new.sender <> 'customer' then
+    begin
+      perform realtime.send(jsonb_build_object('at', clock_timestamp()), 'changed', 'chat:' || new.conversation_id::text, false);
+    exception when others then null;
+    end;
+  end if;
+  return null;
+end $$;
+revoke all on function public._chat_after_message() from public, anon, authenticated;
+create or replace trigger chat_messages_push after insert on public.chat_messages for each row execute function public._chat_after_message();
+
+-- ───────────────────────── coupons: a used coupon is archived, never erased ─────────────────────────
+create or replace function public._offer_before_delete() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if old.used_count > 0 or exists (select 1 from public.offer_redemptions r where r.offer_id = old.id) then
+    raise exception 'offer_used' using errcode = 'P0001',
+      hint = 'This coupon has already been used on orders, so it cannot be deleted. Archive it instead — old bills stay correct.';
+  end if;
+  return old;
+end $$;
+revoke all on function public._offer_before_delete() from public, anon, authenticated;
+create or replace trigger offers_before_delete before delete on public.offers for each row execute function public._offer_before_delete();

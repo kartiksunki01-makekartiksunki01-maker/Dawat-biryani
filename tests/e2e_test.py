@@ -142,7 +142,7 @@ with sync_playwright() as p:
     form.locator('input[type=checkbox]').check()
     form.get_by_role('button', name='Send enquiry').click()
     page.wait_for_selector('text=Enquiry received by the restaurant', timeout=15000)
-    check('Bulk enquiry saved and confirmed by the server', form.get_by_role('link', name=re.compile('Also send on WhatsApp')).get_attribute('href').startswith('https://wa.me/919823324553?text='))
+    check('Bulk enquiry saved and confirmed by the server', form.get_by_role('link', name=re.compile('Also send on WhatsApp')).get_attribute('href').startswith('https://wa.me/919766888897?text='))
     page.screenshot(path=OUT+'final_desktop_bulk.png')
 
     # Settings: quality

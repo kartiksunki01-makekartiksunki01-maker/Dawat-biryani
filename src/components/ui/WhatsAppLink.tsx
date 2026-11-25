@@ -1,16 +1,23 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Copy, Globe, Phone, X } from 'lucide-react';
-import { copyText, isMobileUA, telUrl, waDisplayNumber, whatsappUrl, whatsappWebUrl } from '../../utils/order';
+import { Copy, Globe, MessageCircle, Phone, X } from 'lucide-react';
+import { copyText, isMobileUA, telUrl, waDisplayNumber, whatsappAppUrl, whatsappUrl, whatsappWebUrl } from '../../utils/order';
 import { WhatsAppIcon } from './Bits';
 
 /**
- * The one WhatsApp button used everywhere.
- *  - It is a real <a href="https://wa.me/…"> so it works with no JavaScript, middle-click, long-press, etc.
- *  - Phones/tablets: opened in the SAME tab (app/universal-link hand-off works in Chrome, Safari and in-app
- *    browsers; a new blank tab does not).  Desktop: new tab (wa.me offers the app or WhatsApp Web).
- *  - If the page is still in front of the user 2.2 s later (nothing opened), a fallback panel offers
- *    WhatsApp Web, Copy message, Copy number and Call — so the customer is never stuck.
+ * The one WhatsApp button used everywhere on the site.
+ *
+ * Root cause of "tap does nothing" (Nov 2026): the button was a NEW-TAB link (target="_blank").
+ * In-app browsers on Android/iOS (the browser that opens when you tap a link inside another app)
+ * silently ignore new-tab links, so nothing opened and no error showed. On phones and tablets this
+ * button is therefore a plain SAME-TAB link to https://wa.me/<number>?text=… — a real tap on a real
+ * link, which is exactly what Android App Links / iOS Universal Links need to hand off to the
+ * WhatsApp app. If the app is not installed, wa.me itself shows WhatsApp's web page (browser fallback).
+ * Desktop keeps a new tab (wa.me offers WhatsApp Desktop or WhatsApp Web there).
+ *
+ * Safety net: if the page is still in front of the customer 2.5 s after the tap (nothing opened at
+ * all), a small panel offers "Open WhatsApp app", WhatsApp Web, Call, Copy message and Copy number.
+ * No preventDefault, no window.open, no JavaScript is needed for the link itself to work.
  */
 export function WhatsAppLink({
   text,
@@ -26,6 +33,7 @@ export function WhatsAppLink({
   const [fallback, setFallback] = useState(false);
   const timer = useRef<number | undefined>(undefined);
   const left = useRef(false);
+  const [touch] = useState(() => typeof navigator !== 'undefined' && isMobileUA());
 
   useEffect(() => {
     const gone = () => { left.current = true; };
@@ -43,31 +51,41 @@ export function WhatsAppLink({
 
   const href = whatsappUrl(text);
 
-  const click = (e: React.MouseEvent<HTMLAnchorElement>) => {
+  const click = () => {
     onOpen?.();
     left.current = false;
-    if (isMobileUA()) {
-      e.preventDefault();
-      window.location.assign(href);
-    }
     window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => {
       if (!left.current && document.visibilityState === 'visible') setFallback(true);
-    }, 2200);
+    }, 2500);
   };
 
   return (
     <>
-      <a className={className} href={href} target="_blank" rel="noopener noreferrer" onClick={click} data-wa="1">
+      <a
+        className={className}
+        href={href}
+        target={touch ? undefined : '_blank'}
+        rel="noopener noreferrer"
+        onClick={click}
+        data-wa="1"
+      >
         {children ?? (<><WhatsAppIcon /> WhatsApp</>)}
       </a>
-      {fallback && <Fallback text={text} onClose={() => setFallback(false)} />}
+      {fallback && <Fallback text={text} touch={touch} onClose={() => setFallback(false)} />}
     </>
   );
 }
 
-function Fallback({ text, onClose }: { text: string; onClose: () => void }) {
+function Fallback({ text, touch, onClose }: { text: string; touch: boolean; onClose: () => void }) {
   const [note, setNote] = useState('');
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    closeRef.current?.focus();
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', esc);
+    return () => window.removeEventListener('keydown', esc);
+  }, [onClose]);
   const flash = (m: string) => { setNote(m); window.setTimeout(() => setNote(''), 2200); };
   return createPortal(
     <div
@@ -78,11 +96,19 @@ function Fallback({ text, onClose }: { text: string; onClose: () => void }) {
     >
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm font-semibold">WhatsApp didn’t open?</p>
-        <button type="button" onClick={onClose} aria-label="Close" className="grid h-9 w-9 place-items-center rounded-full ring-1 ring-white/20"><X size={16} /></button>
+        <button ref={closeRef} type="button" onClick={onClose} aria-label="Close" className="grid h-10 w-10 place-items-center rounded-full ring-1 ring-white/20"><X size={16} /></button>
       </div>
-      <p className="mt-1 text-xs text-ivory/70">This device may not have WhatsApp installed, or the number may not be on WhatsApp. Pick another way:</p>
+      <p className="mt-1 text-xs text-ivory/70">
+        {touch
+          ? 'If this site is open inside another app, use that app’s menu → “Open in Chrome / browser”, then tap WhatsApp again. Or pick another way:'
+          : 'Pick another way to reach us:'}
+      </p>
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <a className="btn btn-emerald btn-sm" href={whatsappWebUrl(text)} target="_blank" rel="noopener noreferrer"><Globe size={16} /> WhatsApp Web</a>
+        {touch ? (
+          <a className="btn btn-emerald btn-sm" href={whatsappAppUrl(text)}><MessageCircle size={16} /> Open WhatsApp app</a>
+        ) : (
+          <a className="btn btn-emerald btn-sm" href={whatsappWebUrl(text)} target="_blank" rel="noopener noreferrer"><Globe size={16} /> WhatsApp Web</a>
+        )}
         <a className="btn btn-ghost btn-sm" href={telUrl}><Phone size={16} /> Call</a>
         <button type="button" className="btn btn-ghost btn-sm" onClick={async () => flash((await copyText(text)) ? 'Message copied' : 'Copy failed')}><Copy size={16} /> Copy message</button>
         <button type="button" className="btn btn-ghost btn-sm" onClick={async () => flash((await copyText(waDisplayNumber())) ? 'Number copied' : 'Copy failed')}><Copy size={16} /> Copy {waDisplayNumber()}</button>

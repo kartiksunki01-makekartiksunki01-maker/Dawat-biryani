@@ -86,7 +86,7 @@ export function Footer() {
             <a className="inline-flex min-h-[40px] items-center underline hover:text-gold" href="track.html">My orders on this device</a>
           </p>
           <p className="mt-4 leading-relaxed">
-            Dish and gallery images are representative promotional artwork. Dawat Anna is a fictional virtual host.
+            Dish and gallery images are representative promotional artwork.
           </p>
         </div>
       </div>

@@ -1,6 +1,7 @@
 // Admin side of the live chat: conversation list, unread total, availability and a heartbeat.
-// Live via Supabase Realtime (postgres_changes) with an 8 s polling fallback that also heals missed events.
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+// Live via Supabase Realtime (Postgres Changes on chat_messages; RLS lets only admins receive them) with an
+// 8 s polling fallback (30 s while push is connected) that also heals missed events.
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { errText, useAdmin } from './ui';
 
 export interface Conv {
@@ -28,6 +29,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [tick, setTick] = useState(0);
+  const liveRef = useRef(false);
 
   const reload = useCallback(async () => {
     const [c, s] = await Promise.all([
@@ -48,9 +50,12 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     const kick = () => { window.clearTimeout(debounce); debounce = window.setTimeout(() => void reload(), 250); };
     const ch = sb.channel('admin-chat')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, kick)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_conversations' }, kick)
-      .subscribe((st) => setLive(st === 'SUBSCRIBED'));
-    const poll = window.setInterval(() => { if (document.visibilityState === 'visible') void reload(); }, 8000);
+      .subscribe((st) => { liveRef.current = st === 'SUBSCRIBED'; setLive(liveRef.current); });
+    let ticks = 0;
+    const poll = window.setInterval(() => {
+      ticks += 1;
+      if (document.visibilityState === 'visible' && (!liveRef.current || ticks % 4 === 0)) void reload();
+    }, 8000);
     // presence: the website shows "Online" only while this panel has pinged in the last 5 minutes
     const beat = () => { if (document.visibilityState === 'visible') void sb.rpc('admin_chat_heartbeat'); };
     beat();

@@ -9,6 +9,9 @@ OUT = 'tests/output/'
 res = []
 def check(n, c, d=''):
     res.append(bool(c)); print(('PASS ' if c else 'FAIL ') + n + (f' — {d}' if d else ''), flush=True)
+def rt():
+    r = urllib.request.Request(MOCK, data=b'{}', headers={'content-type': 'application/json'}, method='POST')
+    return json.loads(urllib.request.urlopen(r, timeout=10).read())['realtime']
 def sql(q):
     r = urllib.request.Request(MOCK, data=json.dumps({'sql': q}).encode(), headers={'content-type': 'application/json'}, method='POST')
     return json.loads(urllib.request.urlopen(r, timeout=10).read()).get('rows', [])
@@ -89,7 +92,8 @@ with sync_playwright() as pw:
     adm.get_by_role('button', name='Send reply').click()
     t0 = time.time()
     cust.wait_for_selector('[data-sender="admin"]:has-text("Mutton biryani is ready")', timeout=10000)
-    check('Customer receives the admin reply without refreshing', True, f'{time.time()-t0:.1f}s')
+    dt = time.time() - t0
+    check('Customer receives the admin reply by real-time push (< 3 s; polling is only every 20 s)', dt < 3, f'{dt:.1f}s, broadcasts={rt()["broadcasts"]}')
     check('Customer sees admin Online', 'Online' in cust.get_by_test_id('chat-presence').inner_text())
     check('Latest message is scrolled into view', cust.locator('[role=log]').evaluate("el=>el.scrollHeight-el.scrollTop-el.clientHeight<80"))
     cust.screenshot(path=OUT + 'chat_customer2.jpg', type='jpeg', quality=70)
@@ -98,12 +102,18 @@ with sync_playwright() as pw:
     cust.get_by_role('button', name='Close chat').click()
     adm.get_by_label('Reply to customer').fill('Also, we have a family pack today.')
     adm.get_by_role('button', name='Send reply').click()
+    t0 = time.time()
     cust.get_by_test_id('chat-unread').wait_for(state='visible', timeout=25000)
-    check('Closed widget shows an unread badge for the admin reply', cust.get_by_test_id('chat-unread').inner_text() == '1')
+    dt = time.time() - t0
+    check('Closed widget shows an unread badge for the admin reply, pushed (< 3 s; closed-window polling is 60 s)', cust.get_by_test_id('chat-unread').inner_text() == '1' and dt < 3, f'{dt:.1f}s')
+    check('A short preview of the new reply appears above the chat button', 'family pack' in cust.get_by_test_id('chat-peek').inner_text())
+    check('Browser tab title shows the unread count', cust.title().startswith('(1) New message'), cust.title())
+    cust.screenshot(path=OUT + 'chat_peek.jpg', type='jpeg', quality=70)
     cust.get_by_test_id('chat-launcher').click()
     cust.wait_for_selector('[data-sender="admin"]:has-text("family pack")')
     cust.wait_for_timeout(500)
     check('Opening the chat clears the unread badge', sql("select customer_unread from public.chat_conversations")[0]['customer_unread'] == 0)
+    check('Tab title restored once read', not cust.title().startswith('('), cust.title())
 
     # minimize keeps the conversation
     cust.get_by_role('button', name='Minimize chat').click()
@@ -135,9 +145,12 @@ with sync_playwright() as pw:
     # customer writes again → admin sees new unread live
     cust.get_by_test_id('chat-launcher').click(); cust.get_by_label('Type your message').fill('Delivery please, Dhamankar Naka'); cust.keyboard.press('Enter')
     cust.wait_for_selector('[data-sender="customer"]:has-text("Delivery please")')
+    t0 = time.time()
     adm.get_by_role('tab', name=re.compile('^active')).click()
     adm.wait_for_selector('[data-from="customer"]:has-text("Delivery please")', timeout=12000)
-    check('Admin receives the new customer message without refreshing', True)
+    dt = time.time() - t0
+    check('Admin receives the new customer message by real-time push (< 3 s; polling is every 32 s when live)', dt < 3, f'{dt:.1f}s, db changes seen={rt()["changes"]}')
+    check('Admin panel says live updates are connected', adm.get_by_text('Live updates connected.').count() == 1)
 
     # settings: change welcome, disable widget
     adm.get_by_role('button', name='Chat settings').click()

@@ -12,3 +12,7 @@ alter table storage.objects enable row level security;
 grant usage on schema storage to anon, authenticated; grant select, insert, update, delete on storage.objects to authenticated;
 create publication supabase_realtime;
 revoke all on schema public from public; grant usage on schema public to anon, authenticated;
+-- realtime.send stand-in: forwards the broadcast to the local mock realtime server via LISTEN/NOTIFY
+create schema realtime;
+create function realtime.send(payload jsonb, event text, topic text, private boolean default true) returns void language plpgsql as $$
+begin perform pg_notify('realtime_broadcast', json_build_object('topic', topic, 'event', event, 'payload', payload, 'private', private)::text); end $$;

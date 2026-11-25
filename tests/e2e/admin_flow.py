@@ -229,7 +229,7 @@ with sync_playwright() as pw:
     nav.get_by_role('link', name=re.compile('^Restaurant')).click(); page.wait_for_timeout(1000)
     page.get_by_label('WhatsApp number (digits with country code)').fill('12')
     check('Invalid WhatsApp number blocks saving', page.get_by_text(re.compile('WhatsApp number: digits only')).count() == 1)
-    page.get_by_label('WhatsApp number (digits with country code)').fill('919823324553')
+    page.get_by_label('WhatsApp number (digits with country code)').fill('919766888897')
     page.get_by_text('Delivery available', exact=True).click()
     page.get_by_role('button', name='Save changes').first.click(); page.wait_for_timeout(1200)
     check('Turning delivery off is saved', sql('select delivery_enabled from public.restaurant_settings')[0]['delivery_enabled'] is False)

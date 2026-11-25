@@ -15,8 +15,12 @@ def set_site(enabled=True, dur=2400, returning=False):
 
 with sync_playwright() as pw:
     b = pw.chromium.launch(args=ARGS)
+    check('Old 1.8 s default lifted to 2.4 s by the V3 settings migration', sql("select intro_duration_ms from public.website_settings")['rows'][0]['intro_duration_ms'] == 2400)
     set_site(True, 2400)
     ctx = b.new_context(**pw.devices['Pixel 7']); page = ctx.new_page()
+    # measure inside the page (screenshots below must not inflate the timing)
+    page.add_init_script("""window.__t={}; new MutationObserver(()=>{const el=document.querySelector('[aria-label$="— intro"]'); const now=performance.now();
+      if(el && !window.__t.start) window.__t.start=now; if(!el && window.__t.start && !window.__t.end) window.__t.end=now;}).observe(document,{subtree:true,childList:true});""")
     t0 = time.time(); page.goto(URL, wait_until='domcontentloaded')
     page.locator(INTRO).wait_for(state='visible', timeout=8000); t0 = time.time()
     page.wait_for_timeout(600); page.screenshot(path='tests/output/intro_a.jpg', type='jpeg', quality=70)
@@ -25,8 +29,8 @@ with sync_playwright() as pw:
     check('Skip intro button visible, 44px tall', page.get_by_role('button', name='Skip intro').is_visible() and page.get_by_role('button', name='Skip intro').bounding_box()['height'] >= 44)
     check('No 3D canvas is mounted during the intro', page.locator('canvas').count() == 0)
     page.locator(INTRO).wait_for(state='detached', timeout=8000)
-    dur = time.time() - t0
-    check('Intro length (from first frame) is within 2–3 s', 1.8 <= dur <= 3.4, f'{dur:.2f}s')
+    t = page.evaluate('window.__t'); dur = (t['end'] - t['start']) / 1000
+    check('Intro is on screen 2–3 s in total (measured in the page)', 2.0 <= dur <= 3.0, f'{dur:.2f}s')
     check('Scroll is unlocked afterwards', page.evaluate("getComputedStyle(document.body).overflow !== 'hidden'"))
     check('Session flag remembered', page.evaluate("sessionStorage.getItem('dawat-intro-seen')") == '1')
     page.reload(wait_until='domcontentloaded'); page.wait_for_timeout(800)

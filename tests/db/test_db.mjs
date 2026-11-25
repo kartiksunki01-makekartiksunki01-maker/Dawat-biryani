@@ -370,6 +370,46 @@ check('Retention purge deletes conversations older than the policy (180 days) an
 check('Newer conversations survive the purge', (await su(`select count(*)::int n from public.chat_conversations where id=$1`, [convA])).rows[0].n === 1);
 check('Existing orders/customers/offers untouched by the chat migration', (await su(`select count(*)::int n from public.orders`)).rows[0].n > 0);
 
+// ───────────────────────── V3: real-time push + coupon safety + WhatsApp number ─────────────────────────
+{
+  const lc = new pg.Client({ connectionString: URL });
+  await lc.connect();
+  const pings = [];
+  lc.on('notification', (n) => pings.push(JSON.parse(n.payload)));
+  await lc.query('listen realtime_broadcast');
+  const convP = randomUUID(), tokP = randomBytes(32).toString('hex');
+  await admin(`update public.chat_settings set admin_online = true where id = 1`);
+  await admin(`select public.admin_chat_heartbeat()`);
+  await chatSend(anon, { conversation_id: convP, token: tokP, body: 'Is the shop open?', client_id: randomUUID() });
+  await new Promise((r) => setTimeout(r, 300));
+  const welcomePings = pings.length;
+  pings.length = 0;
+  await chatSend(anon, { conversation_id: convP, token: tokP, body: 'Hello again', client_id: randomUUID() });
+  await new Promise((r) => setTimeout(r, 300));
+  check('Customer messages do not ping the customer channel', pings.length === 0, JSON.stringify(pings));
+  await admin(`select public.admin_chat_reply($1::jsonb)`, [JSON.stringify({ conversation_id: convP, body: 'Yes, open till 10 PM', client_id: randomUUID() })]);
+  await new Promise((r) => setTimeout(r, 300));
+  const p = pings[0];
+  check('Admin reply pings public topic chat:<conversation id> (realtime.send, public)', pings.length === 1 && p.topic === `chat:${convP}` && p.event === 'changed' && p.private === false, JSON.stringify(pings));
+  check('The ping carries no message text (customer re-reads with its secret token)', p && !JSON.stringify(p.payload).includes('open till'));
+  check('The automatic welcome message also pings', welcomePings >= 1, String(welcomePings));
+  await su(`alter function realtime.send(jsonb, text, text, boolean) rename to send_off`);
+  const rpBroken = await admin(`select public.admin_chat_reply($1::jsonb) as r`, [JSON.stringify({ conversation_id: convP, body: 'Still saved without Realtime', client_id: randomUUID() })]);
+  await su(`alter function realtime.send_off(jsonb, text, text, boolean) rename to send`);
+  check('If Realtime is unavailable the reply is still saved (push is best-effort)', !rpBroken.error && rpBroken.rows[0].r.id, errInfo(rpBroken));
+  await lc.end();
+
+  const usedOffer = (await su(`select id from public.offers where code='DAWAT10'`)).rows[0].id;
+  const delUsed = await admin(`delete from public.offers where id=$1`, [usedOffer]);
+  check('A used coupon cannot be deleted (archive keeps old bills explained)', /offer_used/.test(errInfo(delUsed)) && (await su(`select count(*)::int n from public.offers where id=$1`, [usedOffer])).rows[0].n === 1, errInfo(delUsed));
+  const fresh = await admin(`insert into public.offers (title, discount_type, discount_value, code, is_active, max_discount, usage_limit, ends_at) values ('Flat 50', 'fixed', 50, 'FLAT50', true, null, 10, now() + interval '7 days') returning id`);
+  const delFresh = await admin(`delete from public.offers where id=$1`, [fresh.rows?.[0]?.id]);
+  check('An unused coupon can be deleted by the admin', !delFresh.error && delFresh.rowCount === 1, errInfo(delFresh));
+  check('Visitors still cannot delete coupons', (await anon(`delete from public.offers`)).error || (await su(`select count(*)::int n from public.offers where id=$1`, [usedOffer])).rows[0].n === 1);
+  const wa = (await su(`select whatsapp_number, whatsapp_confirmed from public.restaurant_settings where id=1`)).rows[0];
+  check('WhatsApp number migrated to the owner-confirmed +91 97668 88897', wa.whatsapp_number === '919766888897' && wa.whatsapp_confirmed === true, JSON.stringify(wa));
+}
+
 console.log(`\n${pass}/${pass + fail} database checks passed`);
 await pool.end();
 process.exit(fail ? 1 : 0);

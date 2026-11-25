@@ -138,7 +138,7 @@ with sync_playwright() as pw:
     check('Print builds a printable receipt (hidden frame)', bill['bill_number'] in page.evaluate('window.__frames'), str(page.evaluate('window.__frames')))
     track_href = dlg.get_by_role('link', name='Track order').get_attribute('href')
     wa = dlg.get_by_role('link', name=re.compile('Message the restaurant')).get_attribute('href')
-    check('Order-support WhatsApp link is a valid wa.me link with the bill number', wa.startswith('https://wa.me/919823324553?text=') and bill['bill_number'] in urllib.parse.unquote(wa))
+    check('Order-support WhatsApp link is a valid wa.me link with the bill number', wa.startswith('https://wa.me/919766888897?text=') and bill['bill_number'] in urllib.parse.unquote(wa))
 
     # ═════ 4. Tracking page ═════
     tp = ctx.new_page()
@@ -235,7 +235,7 @@ with sync_playwright() as pw:
     page.wait_for_selector('text=Enquiry received by the restaurant', timeout=15000)
     leads = sql("select kind, phone from public.leads where phone='9800000105'")
     check('Bulk enquiry stored in database before success is shown', len(leads) == 1 and leads[0]['kind'] == 'bulk')
-    check('Optional WhatsApp link after a saved enquiry is a real link', form.get_by_role('link', name=re.compile('Also send on WhatsApp')).get_attribute('href').startswith('https://wa.me/919823324553?text='))
+    check('Optional WhatsApp link after a saved enquiry is a real link', form.get_by_role('link', name=re.compile('Also send on WhatsApp')).get_attribute('href').startswith('https://wa.me/919766888897?text='))
 
     # ═════ 8. WhatsApp links open (no blocked window.open) ═════
     n0 = len(popups)
@@ -243,11 +243,11 @@ with sync_playwright() as pw:
     page.wait_for_timeout(500)
     enquire = page.locator('a[href^="https://wa.me/"]').first
     enquire.scroll_into_view_if_needed()
-    with page.expect_navigation(timeout=6000) as nav_info:
-        enquire.click()
-    check('Tapping a WhatsApp button on a phone hands off to WhatsApp in the same tab', nav_info.value.url.startswith('https://wa.me/919823324553'))
+    enquire.tap()
+    page.wait_for_url(re.compile(r'^https://wa\.me/'), wait_until='commit', timeout=20000)
+    check('Tapping a WhatsApp button on a phone hands off to WhatsApp in the same tab', page.url.startswith('https://wa.me/919766888897') and len(popups) == n0)
     page.go_back(); page.wait_for_timeout(1500)
-    bad_wa = page.eval_on_selector_all('a[href*="wa.me"]', "els=>els.map(e=>e.href).filter(h=>!/^https:\\/\\/wa\\.me\\/919823324553(\\?text=.+)?$/.test(h))")
+    bad_wa = page.eval_on_selector_all('a[href*="wa.me"]', "els=>els.map(e=>e.href).filter(h=>!/^https:\\/\\/wa\\.me\\/919766888897(\\?text=.+)?$/.test(h))")
     check('Every WhatsApp link uses the configured number', bad_wa == [], str(bad_wa[:2]))
     check('No window.open with noopener features left in code paths', page.evaluate("typeof window.open") == 'function')
 
