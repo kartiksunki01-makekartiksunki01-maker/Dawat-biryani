@@ -4,6 +4,9 @@
  */
 export type SfxName = 'click' | 'lid' | 'chime' | 'whoosh' | 'add';
 
+/** Restaurant's own background track ("Saffron and Gold"), used whenever no track is uploaded in the admin panel. */
+const DEFAULT_TRACK = `${import.meta.env.BASE_URL}assets/audio/saffron-and-gold.mp3`;
+
 class SoundEngine {
   private ctx: AudioContext | null = null;
   private master!: GainNode;
@@ -18,7 +21,7 @@ class SoundEngine {
   private volume = 0.6;
   // background track (uploaded by the restaurant in the admin panel) — plain <audio>, no CORS needed
   private track: HTMLAudioElement | null = null;
-  private trackUrl: string | null = null;
+  private trackUrl: string | null = DEFAULT_TRACK;
   private fadeTimer: number | null = null;
   private musicAllowed = true; // admin switch
   private sfxAllowed = true; //   admin switch
@@ -30,9 +33,10 @@ class SoundEngine {
   configure(o: { musicUrl?: string | null; musicEnabled?: boolean; sfxEnabled?: boolean; defaultVolume?: number }) {
     if (o.musicEnabled !== undefined) this.musicAllowed = o.musicEnabled;
     if (o.sfxEnabled !== undefined) this.sfxAllowed = o.sfxEnabled;
-    if (o.musicUrl !== undefined && o.musicUrl !== this.trackUrl) {
+    const url = o.musicUrl === undefined ? undefined : o.musicUrl || DEFAULT_TRACK;
+    if (url !== undefined && url !== this.trackUrl) {
       this.disposeTrack();
-      this.trackUrl = o.musicUrl;
+      this.trackUrl = url;
     }
     this.applyMusic();
   }
@@ -45,7 +49,34 @@ class SoundEngine {
   }
 
   get hasUploadedTrack() {
-    return !!this.trackUrl;
+    return !!this.trackUrl && this.trackUrl !== DEFAULT_TRACK;
+  }
+
+  private ensureTrack() {
+    if (!this.track && this.trackUrl) {
+      const a = new Audio();
+      a.src = this.trackUrl;
+      a.loop = true;
+      a.preload = 'auto';
+      a.volume = 0;
+      this.track = a;
+    }
+    return this.track;
+  }
+
+  /** Called inside the visitor's tap while the intro still holds audio: unlocks the track (iOS) silently. */
+  private primeTrack() {
+    const a = this.ensureTrack();
+    if (!a || !a.paused) return;
+    a.muted = true;
+    a.play()
+      .then(() => {
+        if (!this.wantsMusic()) a.pause();
+        a.muted = false;
+      })
+      .catch(() => {
+        a.muted = false;
+      });
   }
 
   private wantsMusic() {
@@ -79,16 +110,9 @@ class SoundEngine {
   }
 
   private playTrack() {
-    if (!this.trackUrl) return;
-    if (!this.track) {
-      const a = new Audio();
-      a.src = this.trackUrl;
-      a.loop = true;
-      a.preload = 'auto';
-      a.volume = 0;
-      this.track = a;
-    }
-    const a = this.track;
+    const a = this.ensureTrack();
+    if (!a) return;
+    a.muted = false;
     a.play()
       .then(() => this.fadeTrack(Math.min(1, this.volume * 0.85), false))
       .catch(() => {
@@ -188,6 +212,7 @@ class SoundEngine {
   async setEnabled(on: boolean) {
     this.enabled = on;
     if (on) {
+      if (this.held && this.musicAllowed && this.userMusic) this.primeTrack();
       const ctx = this.ensure();
       if (!ctx) return;
       if (ctx.state === 'suspended') await ctx.resume();

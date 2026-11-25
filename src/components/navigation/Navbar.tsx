@@ -142,6 +142,7 @@ export function Navbar() {
             <button
               type="button"
               onClick={toggleSound}
+              data-sound-toggle
               className="hidden h-11 w-11 place-items-center rounded-full text-ivory/80 transition hover:bg-ivory/10 hover:text-ivory sm:grid"
               aria-pressed={soundOn}
               aria-label={soundOn ? 'Mute sound' : 'Turn sound on'}

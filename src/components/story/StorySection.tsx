@@ -29,7 +29,14 @@ const raiseTier = (t: QualityTier, cap: QualityTier): QualityTier => {
   return order[Math.min(order.indexOf(cap), order.indexOf(t) + 1)];
 };
 
+/** The website's opening section. The scroll-driven 3D handi story was removed at the owner's request (V3.3);
+ * the static royal hero below keeps the same headline, buttons and Dum Experience callouts. */
 export function StorySection() {
+  return <StaticStory />;
+}
+
+/** Former scroll-driven 3D story — no longer rendered (kept so it can be restored quickly). */
+export function ScrollStory3D() {
   const [webgl] = useState(() => hasWebGL());
   const reduced = useReducedMotion();
   const tier = useQuality();

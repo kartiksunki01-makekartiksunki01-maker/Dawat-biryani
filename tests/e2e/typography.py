@@ -40,7 +40,7 @@ with sync_playwright() as pw:
     for label, kw in [('phone', pw.devices['Pixel 7']), ('tablet', pw.devices['Galaxy Tab S4']), ('tabletL', pw.devices['Galaxy Tab S4 landscape']), ('desktop', {'viewport': {'width': 1440, 'height': 900}})]:
         ctx = b.new_context(**kw); page = ctx.new_page(); page.add_init_script(SKIP_INTRO)
         errs = []; page.on('pageerror', lambda e: errs.append(str(e))); page.on('console', lambda m: errs.append(m.text) if m.type == 'error' else None)
-        page.goto(URL, wait_until='networkidle'); page.wait_for_timeout(2500)
+        page.goto(URL, wait_until="networkidle"); page.wait_for_timeout(2500)
         page.screenshot(path=f'{OUT}{PREFIX}_{label}_hero.jpg', type='jpeg', quality=72)
         # hero (chapter I) heading: sealed in tradition / awakened by fire
         hero = page.evaluate("(()=>{const h=[...document.querySelectorAll('.t-hero')].find(e=>e.getBoundingClientRect().height>0); if(!h) return null; const s=getComputedStyle(h); return {fs: parseFloat(s.fontSize), w: innerWidth}})()")

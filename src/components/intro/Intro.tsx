@@ -6,7 +6,7 @@ import { useStorefront } from '../../data/menuSync';
 import { backendConfigured } from '../../lib/supabase';
 import { useUI } from '../../stores/uiStore';
 import { asset } from '../../utils/format';
-import { lockScroll } from '../../utils/scroll';
+import { lockScroll, scrollToTarget } from '../../utils/scroll';
 import { sound } from '../../utils/sound';
 
 const VISITED_KEY = 'dawat-visited-v2';
@@ -56,6 +56,22 @@ function shouldShow(): boolean {
     /* storage blocked — show the intro */
   }
   return true;
+}
+
+/** Jump to the menu; re-align a couple of times while images above it finish loading (unless the visitor moves). */
+function jumpToMenu() {
+  scrollToTarget('menu', true);
+  let moved = false;
+  const stop = () => (moved = true);
+  const evs = ['wheel', 'touchstart', 'keydown'] as const;
+  evs.forEach((e) => window.addEventListener(e, stop, { once: true, passive: true }));
+  const realign = () => {
+    const el = document.getElementById('menu');
+    if (!moved && el && Math.abs(el.getBoundingClientRect().top - 72) > 8) scrollToTarget('menu', true);
+  };
+  window.setTimeout(realign, 500);
+  window.setTimeout(realign, 1500);
+  window.setTimeout(() => evs.forEach((e) => window.removeEventListener(e, stop)), 1600);
 }
 
 function pickSource() {
@@ -122,6 +138,7 @@ function IntroRun() {
   const doneRef = useRef(false);
   const startedRef = useRef(false);
   const lockedRef = useRef(false);
+  const toMenuRef = useRef(false); // Skip takes the visitor straight to the menu (ordering)
   const timers = useRef<Record<string, number>>({});
 
   const clearTimer = useCallback((k: string) => {
@@ -142,6 +159,10 @@ function IntroRun() {
     lockedRef.current = false;
     lockScroll(false);
     sound.setHeld(false);
+    if (toMenuRef.current) {
+      toMenuRef.current = false;
+      jumpToMenu();
+    }
   }, []);
 
   const finish = useCallback(
@@ -154,6 +175,9 @@ function IntroRun() {
         v.pause();
       }
       Object.keys(timers.current).forEach(clearTimer);
+      toMenuRef.current = how === 'skip';
+      // Skip: unlock and jump to the menu while the overlay still covers the page, so the fade reveals the menu
+      if (how === 'skip') release();
       setFastExit(how !== 'end');
       setVisible(false);
       try {

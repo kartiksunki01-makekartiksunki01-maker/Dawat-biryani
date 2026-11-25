@@ -52,6 +52,24 @@ export default function App() {
     }
   }, [website]);
 
+  // Background music: browsers only allow sound after the visitor's first tap/click/key, so start it then
+  // (unless they switched sound off before). The sound buttons handle their own taps.
+  useEffect(() => {
+    const evs = ['pointerup', 'touchend', 'mousedown', 'keydown', 'click'] as const;
+    const off = () => evs.forEach((e) => window.removeEventListener(e, start, true));
+    function start(e: Event) {
+      if (e instanceof KeyboardEvent && e.key === 'Escape') return; // Esc is not a "user activation"
+      if ((e.target as Element | null)?.closest?.('[data-sound-toggle]')) return;
+      off();
+      const s = useSettings.getState();
+      if (s.soundOn || s.soundOptOut) return;
+      useSettings.setState({ soundOn: true });
+      void sound.setEnabled(true);
+    }
+    evs.forEach((e) => window.addEventListener(e, start, true));
+    return off;
+  }, []);
+
   // Re-measure scroll-driven animations once web fonts have settled.
   useEffect(() => {
     document.fonts?.ready.then(() => ScrollTrigger.refresh());

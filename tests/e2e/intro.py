@@ -23,9 +23,11 @@ PROBE = """window.__t={}; window.__ev=[]; window.__otherMedia=0; window.__audioC
 new MutationObserver(()=>{const el=document.querySelector('[aria-label$="— intro"]'); const now=performance.now();
   if(el && !window.__t.start) window.__t.start=now; if(!el && window.__t.start && !window.__t.end) window.__t.end=now;}).observe(document,{subtree:true,childList:true});
 for (const e of ['playing','ended','error','waiting','pause']) document.addEventListener(e, ev=>{ if(ev.target.tagName==='VIDEO') window.__ev.push([e, Math.round(performance.now())]); }, true);
-const op=HTMLMediaElement.prototype.play; HTMLMediaElement.prototype.play=function(){ if(this.tagName!=='VIDEO' || !this.closest('[aria-label$="— intro"]')) window.__otherMedia++; return op.apply(this, arguments); };
+window.__audios=[]; const op=HTMLMediaElement.prototype.play; HTMLMediaElement.prototype.play=function(){ if(this.tagName!=='VIDEO'){ window.__audios.includes(this)||window.__audios.push(this); if(!this.muted && document.querySelector('[aria-label$="— intro"]')) window.__otherMedia++; } return op.apply(this, arguments); };
 document.addEventListener('click',e=>{ if(e.target.closest&&e.target.closest('[aria-label="Skip intro"]')) window.__t.click=performance.now(); },true);
 const AC=window.AudioContext; if(AC) window.AudioContext=function(...a){ window.__audioCtx++; return new AC(...a); };"""
+MUSIC_ON = "window.__audios.some(a=>a.src.endsWith('/assets/audio/saffron-and-gold.mp3') && !a.paused && !a.muted && a.currentTime>0.2 && a.volume>0)"
+MUSIC_STATE = "window.__audios.map(a=>({src:a.src.split('/').pop(),paused:a.paused,muted:a.muted,t:+a.currentTime.toFixed(1),v:a.volume}))"
 def errors(page, errs):
     page.on('console', lambda m: errs.append(m.text) if m.type == 'error' else None)
     page.on('pageerror', lambda e: errs.append(f'PAGEERROR {e}'))
@@ -66,10 +68,11 @@ with sync_playwright() as pw:
     check('No 3D canvas mounted during the film (keeps playback smooth)', page.locator('#home canvas').count() == 0)
     snd = page.get_by_role('button', name='Turn intro sound on')
     snd.click()
-    check('Sound toggle turns the film audio on', page.eval_on_selector(VID, 'v=>!v.muted') and page.locator('button[aria-pressed="true"]').count() == 1)
+    check('Sound toggle turns the film audio on', page.eval_on_selector(VID, 'v=>!v.muted') and page.locator(INTRO + ' button[aria-pressed="true"]').count() == 1)
     page.get_by_role('button', name='Mute intro sound').click()
     check('Sound toggle mutes it again', page.eval_on_selector(VID, 'v=>v.muted'))
     page.locator(INTRO).wait_for(state='detached', timeout=20000)
+    check('Natural end lands on the homepage top (not the menu)', page.evaluate('scrollY') < 5)
     t = page.evaluate('window.__t'); ev = page.evaluate('window.__ev')
     names = [e[0] for e in ev]
     play_at = next(e[1] for e in ev if e[0] == 'playing'); end_at = next((e[1] for e in ev if e[0] == 'ended'), None)
@@ -84,9 +87,10 @@ with sync_playwright() as pw:
     check('Homepage scrolls normally afterwards', page.evaluate('scrollY') > 50, str(page.evaluate('scrollY')))
     page.evaluate('scrollTo(0,0)'); page.wait_for_timeout(600)
     check('Navbar revealed after the intro', page.evaluate("getComputedStyle(document.querySelector('header')).opacity") == '1')
-    page.wait_for_selector('#home canvas', timeout=20000)
-    check('Main 3D story starts after the intro', page.locator('#home canvas').count() >= 1)
-    check('No other media or site audio started during the film', page.evaluate('window.__otherMedia') == 0 and page.evaluate('window.__audioCtx') == 0)
+    check('After the film: static royal hero (3D scroll story removed)', page.locator('#home[data-mode=static]').count() == 1 and page.locator('#home canvas').count() == 0)
+    check('No audible site music while the film was on screen', page.evaluate('window.__otherMedia') == 0)
+    page.wait_for_timeout(1500)
+    check('Background music "Saffron and Gold" plays after the intro (visitor had tapped)', page.evaluate(MUSIC_ON), json.dumps(page.evaluate(MUSIC_STATE)))
     check('Session flag remembered', page.evaluate("sessionStorage.getItem('dawat-intro-seen')") == '1')
     page.screenshot(path=OUT + 'intro_after_phone.jpg', type='jpeg', quality=72)
     page.reload(wait_until='domcontentloaded'); page.wait_for_timeout(1200)
@@ -112,8 +116,13 @@ with sync_playwright() as pw:
     check('Skip removes the overlay within ~0.5 s (measured in the page)', dt < 0.6, f'{dt:.2f}s')
     page.wait_for_timeout(300)
     check('Skip releases the scroll lock', not locked(page))
+    page.wait_for_timeout(1800)
+    top = page.evaluate("document.getElementById('menu').getBoundingClientRect().top")
+    check('Skip goes straight to the menu (ordering section)', 0 <= top <= 140, f'menu top {top:.0f}px')
+    page.screenshot(path=OUT + 'intro_skip_to_menu_tablet.jpg', type='jpeg', quality=72)
+    check('Skip tap starts the background music', page.evaluate(MUSIC_ON), json.dumps(page.evaluate(MUSIC_STATE)))
     page.mouse.wheel(0, 700); page.wait_for_timeout(900)
-    check('Tablet scrolls after skip', page.evaluate('scrollY') > 50)
+    check('Tablet scrolls after skip', page.evaluate('scrollY') > top + 50)
     check('Skip is remembered for the session', page.evaluate("sessionStorage.getItem('dawat-intro-seen')") == '1')
     page.reload(wait_until='domcontentloaded'); page.wait_for_timeout(1200)
     check('After skip + reload: no intro', page.locator(INTRO).count() == 0)
@@ -133,6 +142,16 @@ with sync_playwright() as pw:
     page.screenshot(path=OUT + 'intro_skip_hover.jpg', type='jpeg', quality=80, clip={'x': 1100, 'y': 0, 'width': 340, 'height': 120})
     page.keyboard.press('Escape'); page.locator(INTRO).wait_for(state='detached', timeout=3000)
     check('Desktop: Escape key skips the intro', page.locator(INTRO).count() == 0 and not locked(page))
+    page.wait_for_timeout(1500)
+    check('Desktop: Escape also goes to the menu', 0 <= page.evaluate("document.getElementById('menu').getBoundingClientRect().top") <= 140)
+    page.mouse.click(700, 500); page.wait_for_timeout(1500)
+    check('Desktop: first click starts the background music', page.evaluate(MUSIC_ON))
+    page.get_by_role('button', name='Mute sound').click(); page.wait_for_timeout(1500)
+    check('Navbar mute stops the music', not page.evaluate(MUSIC_ON))
+    page.reload(wait_until='domcontentloaded'); page.wait_for_timeout(1500); page.mouse.click(700, 500); page.wait_for_timeout(1500)
+    check('Muted choice remembered: a later click does not restart music', not page.evaluate(MUSIC_ON) and page.get_by_role('button', name='Turn sound on').is_visible())
+    page.get_by_role('button', name='Turn sound on').click(); page.wait_for_timeout(1500)
+    check('Navbar sound button turns the music back on', page.evaluate(MUSIC_ON))
     check('Desktop run: no console errors', len(errs) == 0, ' | '.join(errs[:4]))
     ctx.close()
 

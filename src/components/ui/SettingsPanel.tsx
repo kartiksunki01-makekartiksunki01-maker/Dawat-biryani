@@ -87,7 +87,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
       <div className="space-y-1">
         <Toggle
           label="Sound"
-          hint="Ambient music & effects (off by default)"
+          hint="Background music & effects (starts with your first tap)"
           checked={s.soundOn}
           onChange={async (v) => {
             s.setSoundOn(v);
@@ -112,7 +112,7 @@ export function SettingsPanel({ onClose }: { onClose: () => void }) {
             aria-label="Volume"
           />
         </label>
-        <Toggle label="Background music" hint={sound.hasUploadedTrack ? 'Restaurant’s music' : 'Soft built-in ambience'} checked={s.musicOn} onChange={s.setMusicOn} />
+        <Toggle label="Background music" hint={sound.hasUploadedTrack ? 'Restaurant’s music' : '“Saffron and Gold”'} checked={s.musicOn} onChange={s.setMusicOn} />
         <Toggle label="Sound effects" hint="Taps, chimes" checked={s.sfxOn} onChange={s.setSfxOn} />
         <YourData />
       </div>

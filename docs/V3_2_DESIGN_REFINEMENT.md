@@ -60,3 +60,15 @@ Devices emulated in Chromium:
 
 ## 4. Note on the film
 The bottom-right corner of the film has a small ✦ sparkle mark. It is part of the uploaded video and was kept as is.
+
+## V3.3 (owner request, 25 Nov)
+- **Intro film replaced** with `121027.mp4` (1280×720, 10.0 s), re-encoded the same way (720p 2.8 MB, SSIM 0.986; 480p 0.94 MB; poster frame). File names unchanged.
+- **Skip intro (or Esc) → straight to the menu** (`#menu`, where orders are placed). If the film plays to its end, the visitor lands on the homepage top.
+- **Background music = "Saffron and Gold"** (`public/assets/audio/saffron-and-gold.mp3`, 2:57, 128 kbps, 2.8 MB, loops).
+  - It is the built-in track whenever no track is uploaded in admin (production has none, so this one plays). An admin upload still overrides it.
+  - Browsers forbid sound before the visitor interacts, so it starts on the first tap/click/key (for example the Skip tap). It stays silent while the intro film is on screen.
+  - The navbar sound button / Settings → Sound mutes it, and that choice is remembered on the device. The admin "music on/off" switch is still respected.
+- **3D handi scroll story removed.** The site opens on the static royal hero (same headline, buttons, open-status chip and Dum Experience callouts). The old component is kept as `ScrollStory3D` (not rendered) for an easy restore.
+- **No database, repository or other feature change.**
+
+Tests: intro 64/64, typography 32/32, regression 50/50 (3D checks replaced by static-hero checks), ordering 51/51, admin 39/39, WhatsApp 36/36, chat 37/37 + 2/2, DB 153/153, TypeScript 0 errors.

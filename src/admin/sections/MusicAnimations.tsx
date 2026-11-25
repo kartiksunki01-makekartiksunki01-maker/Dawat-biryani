@@ -28,10 +28,10 @@ export function MusicAnimations() {
                 <>
                   <p>Current track: <b>{d.music_title || 'Uploaded track'}</b></p>
                   <audio controls preload="none" src={d.music_url} className="w-full" />
-                  <Btn tone="danger" onClick={() => s.set({ music_url: null, music_title: '' })}>Remove track (use built-in ambience)</Btn>
+                  <Btn tone="danger" onClick={() => s.set({ music_url: null, music_title: '' })}>Remove track (use built-in “Saffron and Gold”)</Btn>
                 </>
               ) : (
-                <p className="text-ivory/65">No track uploaded — the website plays its own soft built-in ambience (generated in the browser, no licence needed).</p>
+                <p className="text-ivory/65">No track uploaded — the website plays its built-in background track “Saffron and Gold”. It starts with the visitor’s first tap (browsers block sound before that) and stays silent during the intro video.</p>
               )}
               <Field label="Upload a track (MP3, OGG, M4A, AAC or WAV, max 15 MB)" hint="Use only music you own or have a licence for — no film songs without permission.">
                 <input type="file" accept="audio/mpeg,audio/ogg,audio/mp4,audio/aac,audio/x-m4a,audio/wav" disabled={uploading} className="text-xs" onChange={async (e) => {
