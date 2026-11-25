@@ -169,7 +169,7 @@ export function StorySection() {
               </p>
               <h2 className="t-hero mt-5 font-display font-semibold text-ivory">
                 <span className="block">Sealed in Tradition.</span>
-                <span className="text-gold-gradient text-gold-sweep block italic">Awakened by Fire.</span>
+                <span className="text-gold-gradient text-gold-sweep block">Awakened by Fire.</span>
               </h2>
               <p className="mt-6 max-w-md text-base leading-relaxed text-ivory/75 sm:text-lg">
                 Discover the royal flavours of Hyderabad, brought to Bhiwandi by {restaurant.name}.
@@ -233,7 +233,7 @@ export function StorySection() {
           <div className="absolute -inset-x-16 -inset-y-12 -z-10 hidden bg-[radial-gradient(closest-side,rgba(11,9,8,0.85),transparent)] md:block" aria-hidden />
           <p className="t-eyebrow text-gold">Chapter III</p>
           <h2 className="t-h3 mt-2 font-display text-ivory">
-            The Royal <span className="italic text-gold-gradient">Ingredient Symphony</span>
+            The Royal <span className="text-gold-gradient">Ingredient Symphony</span>
           </h2>
           <p className="mt-2 hidden text-sm text-ivory/55 md:block">Move your cursor — the spices follow.</p>
         </div>
@@ -244,7 +244,7 @@ export function StorySection() {
             <div className="mx-auto max-w-[1400px]">
               <p className="t-eyebrow text-gold">Chapter IV</p>
               <h2 className="t-h2 mt-3 max-w-2xl font-display text-ivory">
-                From Handi <span className="italic text-gold-gradient">to Your Plate.</span>
+                From Handi <span className="text-gold-gradient">to Your Plate.</span>
               </h2>
               <p className="mt-4 max-w-lg text-ivory/70">Choose your biryani, pick a portion, and send your order enquiry in a few taps.</p>
               <button type="button" className="btn btn-gold mt-6" onClick={() => scrollToTarget('menu')}>
@@ -292,7 +292,7 @@ function StaticStory() {
         <div>
           <p className="t-eyebrow text-gold">{restaurant.name} · {restaurant.address.city}</p>
           <h2 className="t-hero mt-5 font-display font-semibold text-ivory">
-            Sealed in Tradition. <span className="text-gold-gradient block italic">Awakened by Fire.</span>
+            Sealed in Tradition. <span className="text-gold-gradient block">Awakened by Fire.</span>
           </h2>
           <p className="mt-6 max-w-md text-lg text-ivory/75">
             Discover the royal flavours of Hyderabad, brought to Bhiwandi by {restaurant.name}.

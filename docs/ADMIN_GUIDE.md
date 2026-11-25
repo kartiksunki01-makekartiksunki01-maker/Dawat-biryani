@@ -44,7 +44,7 @@ Bill number (jaise `DBH-20261124-0001`) apne aap banta hai, kabhi repeat nahi ho
 
 ## Website Appearance / Music & Animations
 - Announcement banner (jaise "25 Dec ko band").
-- Music upload (sirf apna ya licensed music), volume, intro on/off aur time (2–3 sec). Intro ab sirf logo wala hai; ek baar dekhne ya "Skip" karne ke baad us session mein dobara nahi aata. "Preview intro" se dekh lo.
+- Music upload (sirf apna ya licensed music), volume, aur **Intro video** on/off. Intro ab Dawat ki ~10 sec ki brand video hai (muted shuru hoti hai, "Sound" button se awaaz on). "Skip intro" kabhi bhi daba sakte ho; ek session mein sirf ek baar aati hai. Video ki lambai video se hi aati hai, isliye time wala slider hata diya. "Preview intro" se dekh lo.
 
 ## Account & Security
 - Password badlo (10+ characters).

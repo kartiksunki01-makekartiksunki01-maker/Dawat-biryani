@@ -60,9 +60,9 @@ with sync_playwright() as pw:
     intro.wait_for(state='visible', timeout=8000)
     t0 = time.time()
     check('Intro shows on first visit with Skip button', page.get_by_role('button', name='Skip intro').is_visible())
-    intro.wait_for(state='detached', timeout=8000)
+    intro.wait_for(state='detached', timeout=25000)
     dt = time.time() - t0
-    check('Intro finishes by itself (2.4 s configured; includes screenshot time on software rendering)', dt < 4.8, f'{dt:.1f}s')
+    check('Video intro finishes by itself after the ~10 s film (driver-side timing on software rendering)', 9.5 <= dt <= 18, f'{dt:.1f}s')
     page.wait_for_timeout(1500)
     check('Page scroll is not locked after intro', page.evaluate("getComputedStyle(document.documentElement).overflow !== 'hidden' && getComputedStyle(document.body).overflow !== 'hidden'"))
     check('Announcement from admin settings shown', page.get_by_text('Now taking online orders').count() > 0)

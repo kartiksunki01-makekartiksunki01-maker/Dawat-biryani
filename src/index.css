@@ -109,8 +109,3 @@ code {
   padding: 4px 8px;
   background: var(--code-bg);
 }
-
-/* logo intro: slow rising golden motes (compositor-only: transform + opacity) */
-@keyframes intro-mote { 0% { opacity: 0; transform: translateY(14px) scale(0.6); } 40% { opacity: 0.9; } 100% { opacity: 0; transform: translateY(-34px) scale(1); } }
-.intro-mote { opacity: 0; animation-name: intro-mote; animation-timing-function: ease-out; animation-fill-mode: both; animation-iteration-count: 2; }
-@media (prefers-reduced-motion: reduce) { .intro-mote { animation: none; } }

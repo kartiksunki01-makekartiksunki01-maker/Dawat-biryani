@@ -24,6 +24,7 @@ class SoundEngine {
   private sfxAllowed = true; //   admin switch
   private userMusic = true; //    visitor switch
   private userSfx = true; //      visitor switch
+  private held = false; //        true while the intro video is on screen (its own audio must never overlap ours)
 
   /** Admin settings from the backend. */
   configure(o: { musicUrl?: string | null; musicEnabled?: boolean; sfxEnabled?: boolean; defaultVolume?: number }) {
@@ -48,7 +49,15 @@ class SoundEngine {
   }
 
   private wantsMusic() {
-    return this.enabled && this.musicAllowed && this.userMusic;
+    return this.enabled && !this.held && this.musicAllowed && this.userMusic;
+  }
+
+  /** Silence all site audio (music, ambience, effects) while the intro video plays; release restores it. */
+  setHeld(on: boolean) {
+    if (this.held === on) return;
+    this.held = on;
+    if (this.ctx) this.master.gain.setTargetAtTime(on || !this.enabled ? 0 : this.volume, this.ctx.currentTime, 0.15);
+    this.applyMusic();
   }
 
   private applyMusic() {
@@ -172,7 +181,7 @@ class SoundEngine {
 
   setVolume(v: number) {
     this.volume = v;
-    if (this.ctx && this.enabled) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.1);
+    if (this.ctx && this.enabled && !this.held) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.1);
     if (this.track && this.wantsMusic() && !this.track.paused) this.fadeTrack(Math.min(1, v * 0.85), false);
   }
 
@@ -182,7 +191,7 @@ class SoundEngine {
       const ctx = this.ensure();
       if (!ctx) return;
       if (ctx.state === 'suspended') await ctx.resume();
-      this.master.gain.setTargetAtTime(this.volume, ctx.currentTime, 0.4);
+      this.master.gain.setTargetAtTime(this.held ? 0 : this.volume, ctx.currentTime, 0.4);
       this.applyMusic();
     } else {
       this.fadeTrack(0, true);
@@ -292,7 +301,7 @@ class SoundEngine {
   }
 
   play(name: SfxName) {
-    if (!this.enabled || !this.sfxAllowed || !this.userSfx) return;
+    if (!this.enabled || this.held || !this.sfxAllowed || !this.userSfx) return;
     const ctx = this.ensure();
     if (!ctx) return;
     const t = ctx.currentTime;

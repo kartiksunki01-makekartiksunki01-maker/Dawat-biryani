@@ -26,7 +26,7 @@ export function Finale() {
             <p className="t-eyebrow mt-6 text-gold">Chapter V · Your Royal Dawat Awaits</p>
           </Reveal>
           <h2 id="finale-title" className="t-h2 mx-auto mt-5 max-w-4xl font-display text-ivory">
-            <SplitReveal text="Your Next Royal Feast" /> <SplitReveal text="Awaits." wordClassName="italic text-gold-gradient pr-[0.06em]" delay={0.2} />
+            <SplitReveal text="Your Next Royal Feast" /> <SplitReveal text="Awaits." wordClassName="text-gold-gradient" delay={0.2} />
           </h2>
           <GoldDivider className="mx-auto mt-6" />
           <Reveal delay={0.1}>

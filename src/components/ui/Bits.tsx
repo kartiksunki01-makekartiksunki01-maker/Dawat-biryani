@@ -54,7 +54,7 @@ export function SectionHeading({
         {accent && (
           <>
             {' '}
-            <SplitReveal text={accent} wordClassName="italic text-gold-gradient pr-[0.06em]" delay={0.15} />
+            <SplitReveal text={accent} wordClassName="text-gold-gradient" delay={0.15} />
           </>
         )}
       </h2>
