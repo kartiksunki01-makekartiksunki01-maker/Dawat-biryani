@@ -1,163 +1,281 @@
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, type Variants } from 'framer-motion';
+import { ChevronsRight, Play, Volume2, VolumeX } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { restaurant } from '../../data/restaurant';
+import { useStorefront } from '../../data/menuSync';
+import { backendConfigured } from '../../lib/supabase';
 import { useUI } from '../../stores/uiStore';
 import { asset } from '../../utils/format';
-import { lockScroll } from '../../utils/scroll';
-import { SplitChars } from '../motion/Motion';
+import { lockScroll, scrollToTarget } from '../../utils/scroll';
+import { sound } from '../../utils/sound';
 
-const SEEN_KEY = 'dawat-intro-seen';
+const VISITED_KEY = 'dawat-visited-v2';
+const SESSION_KEY = 'dawat-intro-seen';
 const ease = [0.22, 1, 0.36, 1] as const;
 
-/** 2D canvas of floating golden dust — cheap, independent of WebGL. */
-function DustCanvas() {
-  const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const c = ref.current!;
-    const g = c.getContext('2d')!;
-    let raf = 0;
-    const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-    const resize = () => {
-      c.width = window.innerWidth * dpr;
-      c.height = window.innerHeight * dpr;
-    };
-    resize();
-    window.addEventListener('resize', resize);
-    // 40 slow particles; glow is pre-rendered ONCE into a sprite (shadowBlur per frame was the lag)
-    const sprite = document.createElement('canvas');
-    sprite.width = sprite.height = 32;
-    const sg = sprite.getContext('2d')!;
-    const grad = sg.createRadialGradient(16, 16, 0, 16, 16, 16);
-    grad.addColorStop(0, 'rgba(255, 226, 140, 1)');
-    grad.addColorStop(0.35, 'rgba(245, 180, 60, 0.55)');
-    grad.addColorStop(1, 'rgba(245, 158, 11, 0)');
-    sg.fillStyle = grad;
-    sg.fillRect(0, 0, 32, 32);
-    const parts = Array.from({ length: 40 }, () => ({
-      x: Math.random(),
-      y: Math.random(),
-      r: 4 + Math.random() * 7,
-      vx: (Math.random() - 0.5) * 0.00006,
-      vy: -0.00006 - Math.random() * 0.00012,
-      tw: Math.random() * Math.PI * 2,
-    }));
-    const start = performance.now();
-    let last = start;
-    const tick = (now: number) => {
-      const dt = Math.min(48, now - last); // time-based so speed is steady at any fps
-      last = now;
-      const t = (now - start) / 1000;
-      const fade = Math.min(1, t / 2.2);
-      g.clearRect(0, 0, c.width, c.height);
-      for (const p of parts) {
-        p.x += p.vx * dt;
-        p.y += p.vy * dt;
-        if (p.y < -0.03) p.y = 1.03;
-        g.globalAlpha = (0.3 + 0.5 * (0.5 + 0.5 * Math.sin(t * 0.9 + p.tw))) * fade;
-        const s = p.r * dpr * 2;
-        g.drawImage(sprite, p.x * c.width - s / 2, p.y * c.height - s / 2, s, s);
-      }
-      g.globalAlpha = 1;
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener('resize', resize);
-    };
-  }, []);
-  return <canvas ref={ref} className="absolute inset-0 h-full w-full" aria-hidden />;
+/** The restaurant's brand film (≈10 s, 1280×720). The 480p copy is used on Data Saver / 2G / 3G connections. */
+const VIDEO = {
+  full: 'assets/videos/dawat-intro-720.mp4',
+  lite: 'assets/videos/dawat-intro-480.mp4',
+  poster: 'assets/videos/dawat-intro-poster.jpg',
+};
+/** Nothing playing after this long (slow network, broken file) → go straight to the website. */
+const START_TIMEOUT_MS = 5000;
+/** Autoplay refused (e.g. iPhone Low Power Mode): wait this long for a tap on "Play", then enter the site. */
+const BLOCKED_TIMEOUT_MS = 8000;
+/** Buffering this long in the middle of the film → enter the site instead of showing a frozen frame. */
+const STALL_TIMEOUT_MS = 4500;
+/** Absolute upper bound for the overlay, whatever happens (10 s film + generous slack). */
+const HARD_CAP_MS = 25000;
+
+type ExitKind = 'skip' | 'end' | 'fail';
+
+const isPreview = () => {
+  try {
+    return new URLSearchParams(location.search).get('intro') === 'preview';
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Brand video intro. Shown at most once per browser session (marked as soon as it starts, so a reload never
+ * replays it), never on in-page navigation, never with reduced motion, and never when the admin turns it off.
+ * Returning visitors skip it unless the restaurant turns that on. `?intro=preview` always shows it.
+ */
+function shouldShow(): boolean {
+  const w = useStorefront.getState().website;
+  try {
+    if (isPreview()) return true;
+    if (w && !w.intro_enabled) return false;
+    if (sessionStorage.getItem(SESSION_KEY) === '1') return false;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
+    const returning = localStorage.getItem(VISITED_KEY) === '1';
+    if (returning && !(w?.intro_for_returning ?? false)) return false;
+  } catch {
+    /* storage blocked — show the intro */
+  }
+  return true;
 }
 
-function HandiSilhouette() {
-  return (
-    <motion.svg
-      viewBox="0 0 240 200"
-      className="absolute bottom-[-6vh] left-1/2 w-[min(70vw,420px)] -translate-x-1/2"
-      initial={{ y: 80, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: 2, ease, delay: 3.6 }}
-      aria-hidden
-    >
-      <defs>
-        <linearGradient id="hs" x1="0" x2="1">
-          <stop offset="0" stopColor="#3b2412" />
-          <stop offset="0.5" stopColor="#7a5220" />
-          <stop offset="1" stopColor="#2a190d" />
-        </linearGradient>
-      </defs>
-      {/* steam: soft wide strokes, opacity-only (no filter:blur, no path-length redraw) */}
-      {[0, 1, 2].map((i) => (
-        <motion.path
-          key={i}
-          d={`M${100 + i * 16} 70 C ${82 + i * 16} 50, ${128 + i * 8} 38, ${108 + i * 14} 14`}
-          stroke="#fff1d2"
-          strokeOpacity="0.16"
-          strokeWidth="11"
-          strokeLinecap="round"
-          fill="none"
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: [0, 0.8, 0], y: -26 }}
-          transition={{ duration: 3.4, delay: 4.8 + i * 0.5, repeat: Infinity, ease: 'easeInOut' }}
-        />
-      ))}
-      <path d="M58 92 Q120 70 182 92 L176 98 Q120 80 64 98Z" fill="#c9953e" />
-      <path
-        d="M66 98 Q120 84 174 98 C186 118 206 136 196 164 C186 190 150 200 120 200 C90 200 54 190 44 164 C34 136 54 118 66 98Z"
-        fill="url(#hs)"
-        stroke="#D4AF37"
-        strokeOpacity="0.55"
-      />
-      <path d="M48 130 Q120 118 192 130" stroke="#D4AF37" strokeOpacity="0.5" fill="none" />
-    </motion.svg>
-  );
+/** Jump to the menu; re-align a couple of times while images above it finish loading (unless the visitor moves). */
+function jumpToMenu() {
+  scrollToTarget('menu', true);
+  let moved = false;
+  const stop = () => (moved = true);
+  const evs = ['wheel', 'touchstart', 'keydown'] as const;
+  evs.forEach((e) => window.addEventListener(e, stop, { once: true, passive: true }));
+  const realign = () => {
+    const el = document.getElementById('menu');
+    if (!moved && el && Math.abs(el.getBoundingClientRect().top - 72) > 8) scrollToTarget('menu', true);
+  };
+  window.setTimeout(realign, 500);
+  window.setTimeout(realign, 1500);
+  window.setTimeout(() => evs.forEach((e) => window.removeEventListener(e, stop)), 1600);
 }
 
-export function Intro() {
-  const setIntroDone = useUI((s) => s.setIntroDone);
-  const sceneReady = useUI((s) => s.sceneReady);
-  const [visible, setVisible] = useState(true);
-  const [short] = useState(() => {
-    try {
-      return (
-        sessionStorage.getItem(SEEN_KEY) === '1' || window.matchMedia('(prefers-reduced-motion: reduce)').matches
-      );
-    } catch {
-      return false;
+function pickSource() {
+  const c = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+  const slow = !!c && (c.saveData === true || /2g|3g/.test(c.effectiveType ?? ''));
+  return asset(slow ? VIDEO.lite : VIDEO.full);
+}
+
+// Warm the poster early (only when the intro is likely to show) so the first frame is never a black screen.
+if (typeof window !== 'undefined') {
+  try {
+    const likely =
+      isPreview() ||
+      (sessionStorage.getItem(SESSION_KEY) !== '1' &&
+        localStorage.getItem(VISITED_KEY) !== '1' &&
+        !window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    if (likely) {
+      const l = document.createElement('link');
+      l.rel = 'preload';
+      l.as = 'image';
+      l.href = asset(VIDEO.poster);
+      document.head.appendChild(l);
     }
-  });
-  const [timelineDone, setTimelineDone] = useState(false);
-  const [waited, setWaited] = useState(false);
+  } catch {
+    /* ignore */
+  }
+}
 
-  const finish = useCallback(() => {
-    setVisible(false);
+/** Waits (max 0.9 s, behind a plain dark cover) for the admin's intro settings so a disabled intro never flashes. */
+export function Intro() {
+  const website = useStorefront((s) => s.website);
+  const [ready, setReady] = useState(() => !!website || !backendConfigured);
+  useEffect(() => {
+    if (website) {
+      setReady(true);
+      return;
+    }
+    const t = window.setTimeout(() => setReady(true), 900);
+    return () => window.clearTimeout(t);
+  }, [website]);
+  if (!ready) return <div className="fixed inset-0 z-[100] bg-smoke" aria-hidden />;
+  return <IntroRun />;
+}
+
+// Skip / failure: a quick dissolve. Natural end: a slower cinematic fade with a slight push-in on the last frame.
+const overlayV: Variants = {
+  exit: (fast: boolean) => ({ opacity: 0, transition: { duration: fast ? 0.35 : 0.9, ease, delay: fast ? 0 : 0.1 } }),
+};
+const filmV: Variants = {
+  exit: (fast: boolean) => ({ scale: fast ? 1 : 1.04, transition: { duration: fast ? 0.35 : 1, ease } }),
+};
+
+function IntroRun() {
+  const setIntroDone = useUI((s) => s.setIntroDone);
+  const [show] = useState(shouldShow);
+  const [src] = useState(pickSource);
+  const [visible, setVisible] = useState(show);
+  const [fastExit, setFastExit] = useState(true);
+  const [muted, setMuted] = useState(true);
+  const [phase, setPhase] = useState<'loading' | 'playing' | 'blocked'>('loading');
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  const doneRef = useRef(false);
+  const startedRef = useRef(false);
+  const lockedRef = useRef(false);
+  const toMenuRef = useRef(false); // Skip takes the visitor straight to the menu (ordering)
+  const timers = useRef<Record<string, number>>({});
+
+  const clearTimer = useCallback((k: string) => {
+    if (timers.current[k]) window.clearTimeout(timers.current[k]);
+    delete timers.current[k];
+  }, []);
+  const setTimer = useCallback(
+    (k: string, fn: () => void, ms: number) => {
+      clearTimer(k);
+      timers.current[k] = window.setTimeout(fn, ms);
+    },
+    [clearTimer],
+  );
+
+  /** Gives scrolling and site audio back exactly once. */
+  const release = useCallback(() => {
+    if (!lockedRef.current) return;
+    lockedRef.current = false;
+    lockScroll(false);
+    sound.setHeld(false);
+    if (toMenuRef.current) {
+      toMenuRef.current = false;
+      jumpToMenu();
+    }
+  }, []);
+
+  const finish = useCallback(
+    (how: ExitKind) => {
+      if (doneRef.current) return;
+      doneRef.current = true;
+      const v = videoRef.current;
+      if (v) {
+        v.muted = true;
+        v.pause();
+      }
+      Object.keys(timers.current).forEach(clearTimer);
+      toMenuRef.current = how === 'skip';
+      // Skip: unlock and jump to the menu while the overlay still covers the page, so the fade reveals the menu
+      if (how === 'skip') release();
+      setFastExit(how !== 'end');
+      setVisible(false);
+      try {
+        localStorage.setItem(VISITED_KEY, '1');
+      } catch {
+        /* private mode */
+      }
+      // safety net: even if the fade never completes, the page is released
+      window.setTimeout(() => {
+        release();
+        setIntroDone();
+      }, 1600);
+    },
+    [release, setIntroDone, clearTimer],
+  );
+
+  useEffect(() => {
+    if (!show) {
+      setIntroDone();
+      return;
+    }
+    lockedRef.current = true;
+    lockScroll(true);
+    sound.setHeld(true);
     try {
-      sessionStorage.setItem(SEEN_KEY, '1');
+      sessionStorage.setItem(SESSION_KEY, '1');
     } catch {
       /* private mode */
     }
-  }, []);
 
-  useEffect(() => {
-    lockScroll(true);
-    // calmer pacing: ~6.4 s of story, then hold until the 3D scene is really ready
-    const t1 = window.setTimeout(() => setTimelineDone(true), short ? 900 : 6400);
-    // never hold visitors hostage to a slow GPU — cap the wait
-    const t2 = window.setTimeout(() => setWaited(true), short ? 2500 : 10000);
+    const v = videoRef.current;
+    if (v) {
+      // muted + inline is what lets mobile browsers autoplay
+      v.defaultMuted = true;
+      v.muted = true;
+      v.setAttribute('muted', '');
+      v.play().catch((err: unknown) => {
+        if (doneRef.current) return;
+        if ((err as { name?: string })?.name === 'NotAllowedError') {
+          setPhase('blocked');
+          clearTimer('start');
+          setTimer('blocked', () => finish('fail'), BLOCKED_TIMEOUT_MS);
+        } else if ((err as { name?: string })?.name !== 'AbortError') {
+          finish('fail');
+        }
+      });
+    }
+    setTimer('start', () => !startedRef.current && finish('fail'), START_TIMEOUT_MS);
+    setTimer('cap', () => finish('fail'), HARD_CAP_MS);
+
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && finish('skip');
+    window.addEventListener('keydown', onKey);
+    const t = timers.current;
     return () => {
-      window.clearTimeout(t1);
-      window.clearTimeout(t2);
+      window.removeEventListener('keydown', onKey);
+      Object.keys(t).forEach(clearTimer);
+      release();
     };
-  }, [short]);
+  }, [show, finish, release, setIntroDone, setTimer, clearTimer]);
 
+  // thin gold progress line, driven straight from the video clock (no re-renders)
   useEffect(() => {
-    if (visible && timelineDone && (sceneReady || waited)) finish();
-  }, [visible, timelineDone, sceneReady, waited, finish]);
+    if (phase !== 'playing') return;
+    let raf = 0;
+    const tick = () => {
+      const v = videoRef.current;
+      const bar = barRef.current;
+      if (v && bar && v.duration > 0) bar.style.transform = `scaleX(${Math.min(1, v.currentTime / v.duration)})`;
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [phase]);
+
+  if (!show) return null;
+
+  const toggleSound = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    const next = !muted;
+    v.muted = next;
+    setMuted(next);
+    if (v.paused && !doneRef.current) void v.play().catch(() => {});
+  };
+
+  const playAfterTap = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    clearTimer('blocked');
+    setTimer('start', () => !startedRef.current && finish('fail'), START_TIMEOUT_MS);
+    v.play().catch(() => finish('fail'));
+  };
 
   return (
     <AnimatePresence
+      custom={fastExit}
       onExitComplete={() => {
-        lockScroll(false);
+        release();
         setIntroDone();
       }}
     >
@@ -165,138 +283,84 @@ export function Intro() {
         <motion.div
           key="intro"
           role="dialog"
+          aria-modal="true"
           aria-label={`${restaurant.name} — intro`}
-          className="fixed inset-0 z-[100] overflow-hidden bg-smoke"
-          exit={{ opacity: 0, scale: 1.03 }}
-          transition={{ duration: short ? 0.5 : 1.3, ease }}
+          data-intro-phase={phase}
+          className="fixed inset-0 z-[100] touch-none overflow-hidden overscroll-contain bg-black"
+          custom={fastExit}
+          variants={overlayV}
+          exit="exit"
         >
-          {!short && <DustCanvas />}
-          {/* amber atmosphere */}
-          <motion.div
-            className="absolute inset-0"
-            style={{
-              background:
-                'radial-gradient(60% 50% at 50% 55%, rgba(245,158,11,0.22), transparent 70%), radial-gradient(40% 30% at 50% 100%, rgba(220,38,38,0.18), transparent 70%)',
+          {/* deep royal backdrop around the letterboxed film (the film itself is never cropped or stretched) */}
+          <div className="absolute inset-0" style={{ background: 'radial-gradient(90% 70% at 50% 50%, #1a0a0e 0%, #070304 65%, #000 100%)' }} aria-hidden />
+
+          <motion.video
+            ref={videoRef}
+            className="absolute inset-0 h-full w-full object-contain"
+            src={src}
+            poster={asset(VIDEO.poster)}
+            muted
+            playsInline
+            preload="auto"
+            disablePictureInPicture
+            disableRemotePlayback
+            controlsList="nodownload nofullscreen noremoteplayback"
+            aria-label={`${restaurant.name} brand film`}
+            custom={fastExit}
+            variants={filmV}
+            onPlaying={() => {
+              startedRef.current = true;
+              clearTimer('start');
+              clearTimer('stall');
+              clearTimer('blocked');
+              setPhase('playing');
             }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: short ? 0.3 : 2.4 }}
+            onWaiting={() => {
+              if (startedRef.current) setTimer('stall', () => finish('fail'), STALL_TIMEOUT_MS);
+            }}
+            onEnded={() => finish('end')}
+            onError={() => finish('fail')}
           />
-          {/* royal arch silhouette */}
-          {!short && (
-            <svg
-              className="absolute left-1/2 top-1/2 h-[86vh] w-[min(80vw,620px)] -translate-x-1/2 -translate-y-1/2 text-gold/40"
-              viewBox="0 0 200 260"
-              fill="none"
-              preserveAspectRatio="none"
-              aria-hidden
+
+          {/* keeps the buttons legible over bright frames */}
+          <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-black/55 to-transparent" aria-hidden />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/45 to-transparent" aria-hidden />
+
+          {phase === 'blocked' && (
+            <button
+              type="button"
+              onClick={playAfterTap}
+              className="intro-glass-btn absolute left-1/2 top-1/2 flex min-h-[56px] -translate-x-1/2 -translate-y-1/2 items-center gap-3 rounded-full px-7"
             >
-              <motion.path
-                d="M10 258 V140 C10 92 64 86 100 6 C136 86 190 92 190 140 V258"
-                stroke="currentColor"
-                strokeWidth="0.6"
-                vectorEffect="non-scaling-stroke"
-                initial={{ pathLength: 0 }}
-                animate={{ pathLength: 1 }}
-                transition={{ duration: 3.4, ease: 'easeInOut' }}
-              />
-              <motion.path
-                d="M22 258 V144 C22 102 70 96 100 26 C130 96 178 102 178 144 V258"
-                stroke="currentColor"
-                strokeOpacity="0.4"
-                strokeWidth="0.6"
-                vectorEffect="non-scaling-stroke"
-                initial={{ pathLength: 0 }}
-                animate={{ pathLength: 1 }}
-                transition={{ duration: 3.6, ease: 'easeInOut', delay: 0.3 }}
-              />
-            </svg>
+              <Play size={18} className="fill-current" aria-hidden />
+              <span>Play intro</span>
+            </button>
           )}
-          {/* smoke */}
-          <div className="absolute inset-x-0 bottom-0 h-1/2 bg-[radial-gradient(70%_60%_at_50%_100%,rgba(255,241,210,0.07),transparent)]" />
-
-          <div className="relative flex h-full flex-col items-center justify-center px-6 text-center">
-            <motion.div
-              className="relative"
-              initial={{ opacity: 0, scale: 0.82 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: short ? 0.4 : 2, ease, delay: short ? 0 : 1.2 }}
-            >
-              {/* ornamental ring */}
-              <svg className="absolute -inset-5 h-[calc(100%+2.5rem)] w-[calc(100%+2.5rem)]" viewBox="0 0 100 100" aria-hidden>
-                <motion.circle
-                  cx="50"
-                  cy="50"
-                  r="48"
-                  fill="none"
-                  stroke="#D4AF37"
-                  strokeWidth="0.4"
-                  strokeDasharray="1 2.2"
-                  initial={{ pathLength: 0, rotate: -90 }}
-                  animate={{ pathLength: 1, rotate: 0 }}
-                  transition={{ duration: short ? 0.5 : 2.4, ease, delay: short ? 0 : 1.8 }}
-                />
-              </svg>
-              <div className="relative h-36 w-36 overflow-hidden rounded-full shadow-[0_0_60px_rgba(212,175,55,0.35)] sm:h-44 sm:w-44">
-                <img src={asset('assets/images/logo.png')} alt={`${restaurant.name} logo`} className="h-full w-full" />
-                {/* shine: plain transform-only sweep (mask + blend-mode removed — they forced repaints) */}
-                {!short && (
-                  <motion.span
-                    aria-hidden
-                    className="pointer-events-none absolute inset-0"
-                    style={{
-                      background: 'linear-gradient(110deg, transparent 38%, rgba(255,241,196,0.28) 50%, transparent 62%)',
-                    }}
-                    initial={{ x: '-120%' }}
-                    animate={{ x: '120%' }}
-                    transition={{ duration: 2, ease: 'easeInOut', delay: 2.8 }}
-                  />
-                )}
-              </div>
-            </motion.div>
-
-            <h1 className="mt-10 font-display text-4xl font-semibold text-ivory sm:text-6xl">
-              {short ? restaurant.name : <SplitChars text={restaurant.name} delay={2.8} />}
-            </h1>
-            <motion.p
-              className="t-eyebrow mt-4 text-gold"
-              initial={{ opacity: 0, letterSpacing: '0.6em' }}
-              animate={{ opacity: 1, letterSpacing: '0.32em' }}
-              transition={{ duration: 1.8, ease, delay: short ? 0.15 : 3.9 }}
-            >
-              {restaurant.tagline}
-            </motion.p>
-            <motion.p
-              className="mt-3 font-deva text-sm text-ivory/50"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 1.4, delay: short ? 0.2 : 4.6 }}
-              lang="mr"
-            >
-              दावत मध्ये आपले स्वागत आहे
-            </motion.p>
-            {timelineDone && !sceneReady && !waited && (
-              <motion.p
-                className="mt-8 text-xs tracking-[0.2em] text-ivory/50 uppercase"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: [0.3, 1, 0.3] }}
-                transition={{ duration: 1.6, repeat: Infinity }}
-                role="status"
-              >
-                Preparing the dum…
-              </motion.p>
-            )}
-          </div>
-
-          {!short && <HandiSilhouette />}
 
           <button
             type="button"
-            onClick={finish}
-            className="btn btn-ghost btn-sm absolute right-4 top-4 z-10 sm:right-8 sm:top-8"
+            onClick={() => finish('skip')}
+            className="intro-glass-btn group absolute right-[calc(env(safe-area-inset-right,0px)+1rem)] top-[calc(env(safe-area-inset-top,0px)+1rem)] z-10 flex min-h-[46px] min-w-[46px] items-center gap-2 rounded-full pl-5 pr-4 sm:right-[calc(env(safe-area-inset-right,0px)+2rem)] sm:top-[calc(env(safe-area-inset-top,0px)+2rem)]"
+            aria-label="Skip intro"
           >
-            Skip intro
+            <span>Skip intro</span>
+            <ChevronsRight size={16} className="transition-transform duration-300 group-hover:translate-x-0.5" aria-hidden />
           </button>
+
+          <button
+            type="button"
+            onClick={toggleSound}
+            aria-pressed={!muted}
+            aria-label={muted ? 'Turn intro sound on' : 'Mute intro sound'}
+            className="intro-glass-btn absolute bottom-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] left-[calc(env(safe-area-inset-left,0px)+1rem)] z-10 flex min-h-[46px] min-w-[46px] items-center gap-2 rounded-full px-4 sm:bottom-[calc(env(safe-area-inset-bottom,0px)+2rem)] sm:left-[calc(env(safe-area-inset-left,0px)+2rem)]"
+          >
+            {muted ? <VolumeX size={16} aria-hidden /> : <Volume2 size={16} aria-hidden />}
+            <span className="hidden sm:inline">{muted ? 'Sound off' : 'Sound on'}</span>
+          </button>
+
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[2px] bg-white/[0.06]" aria-hidden>
+            <div ref={barRef} className="h-full origin-left bg-gradient-to-r from-[#b8862b] via-[#f6d77a] to-[#d4af37]" style={{ transform: 'scaleX(0)' }} />
+          </div>
         </motion.div>
       )}
     </AnimatePresence>

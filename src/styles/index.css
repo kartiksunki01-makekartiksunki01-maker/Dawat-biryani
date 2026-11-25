@@ -68,13 +68,14 @@
 
 @layer components {
 /* ─── Fluid editorial type ─── */
+/* V3.2: display + section headings trimmed 1% (×0.99) from 2.6/1.2+5.2vw/6.4 and 2.2/1.3+3.6vw/4.9 */
 .t-hero {
-  font-size: clamp(2.6rem, 1.2rem + 5.2vw, 6.4rem);
+  font-size: clamp(2.574rem, 1.188rem + 5.148vw, 6.336rem);
   line-height: 0.98;
   letter-spacing: -0.02em;
 }
 .t-h2 {
-  font-size: clamp(2.2rem, 1.3rem + 3.6vw, 4.9rem);
+  font-size: clamp(2.178rem, 1.287rem + 3.564vw, 4.851rem);
   line-height: 1.02;
   letter-spacing: -0.015em;
 }
@@ -87,6 +88,151 @@
   font-size: 0.74rem;
   letter-spacing: 0.32em;
   text-transform: uppercase;
+}
+
+/* ─── Intro video controls: dark glass, thin gold border ─── */
+.intro-glass-btn {
+  font-family: var(--font-royal);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #f6e7c1;
+  background: rgb(10 6 6 / 0.45);
+  border: 1px solid rgb(212 175 55 / 0.65);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  backdrop-filter: blur(12px) saturate(1.2);
+  box-shadow:
+    0 6px 24px rgb(0 0 0 / 0.35),
+    inset 0 1px 0 rgb(255 241 196 / 0.08);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition:
+    border-color 0.3s,
+    background-color 0.3s,
+    box-shadow 0.3s,
+    transform 0.3s var(--ease-royal);
+}
+@media (hover: hover) {
+  .intro-glass-btn:hover {
+    border-color: #f6d77a;
+    background: rgb(30 14 10 / 0.6);
+    box-shadow:
+      0 8px 28px rgb(0 0 0 / 0.4),
+      0 0 18px rgb(212 175 55 / 0.28);
+    transform: translateY(-1px);
+  }
+}
+.intro-glass-btn:active {
+  transform: scale(0.98);
+}
+
+/* ─── Royal switch (site + admin toggles): gold track, ivory pearl thumb, springy slide ─── */
+.royal-switch {
+  position: relative;
+  display: inline-block;
+  flex-shrink: 0;
+  width: 3.1rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgb(255 255 255 / 0.05), rgb(255 255 255 / 0.11));
+  box-shadow:
+    inset 0 1px 3px rgb(0 0 0 / 0.55),
+    inset 0 0 0 1px rgb(212 175 55 / 0.28);
+  transition:
+    background 0.35s var(--ease-royal),
+    box-shadow 0.35s var(--ease-royal);
+}
+.royal-switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: calc(1.75rem - 6px);
+  height: calc(1.75rem - 6px);
+  border-radius: 999px;
+  background: radial-gradient(circle at 35% 30%, #fffaf0, #e7dabd 62%, #bfae88);
+  box-shadow:
+    0 2px 6px rgb(0 0 0 / 0.45),
+    0 0 0 1px rgb(0 0 0 / 0.12);
+  transition:
+    transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background 0.3s;
+}
+input:checked + .royal-switch {
+  background: linear-gradient(135deg, #8a6420 0%, #d4af37 45%, #f6d77a 85%);
+  box-shadow:
+    inset 0 1px 2px rgb(0 0 0 / 0.3),
+    inset 0 0 0 1px rgb(255 241 196 / 0.35),
+    0 0 16px rgb(212 175 55 / 0.4);
+}
+input:checked + .royal-switch::after {
+  transform: translateX(1.35rem);
+  background: radial-gradient(circle at 35% 30%, #ffffff, #fff4d8 55%, #ecd394);
+}
+input:focus-visible + .royal-switch {
+  outline: 2px solid var(--color-saffron);
+  outline-offset: 3px;
+}
+@media (hover: hover) {
+  label:hover > input:not(:disabled):not(:checked) + .royal-switch {
+    box-shadow:
+      inset 0 1px 3px rgb(0 0 0 / 0.55),
+      inset 0 0 0 1px rgb(212 175 55 / 0.55);
+  }
+  .royal-row:hover {
+    background: rgb(255 241 210 / 0.04);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .royal-switch,
+  .royal-switch::after {
+    transition: none;
+  }
+}
+.royal-row {
+  transition: background-color 0.25s;
+}
+.royal-panel {
+  background:
+    radial-gradient(120% 60% at 100% 0%, rgb(212 175 55 / 0.1), transparent 60%),
+    linear-gradient(180deg, rgb(28 18 14 / 0.94), rgb(12 8 7 / 0.96));
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  backdrop-filter: blur(18px) saturate(1.2);
+  box-shadow:
+    0 24px 60px rgb(0 0 0 / 0.55),
+    inset 0 0 0 1px rgb(212 175 55 / 0.25),
+    inset 0 1px 0 rgb(255 241 196 / 0.08);
+}
+.royal-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 40px;
+  padding: 0 0.9rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  color: rgb(255 241 210 / 0.8);
+  background: rgb(255 241 210 / 0.05);
+  box-shadow: inset 0 0 0 1px rgb(212 175 55 / 0.22);
+  transition:
+    background-color 0.25s,
+    box-shadow 0.25s,
+    color 0.25s;
+}
+.royal-chip:hover:not(:disabled) {
+  color: #fff1d2;
+  background: rgb(212 175 55 / 0.12);
+  box-shadow: inset 0 0 0 1px rgb(212 175 55 / 0.5);
+}
+.royal-chip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.royal-chip-gold {
+  color: #f6e7c1;
+  background: linear-gradient(135deg, rgb(212 175 55 / 0.18), rgb(212 175 55 / 0.06));
+  box-shadow: inset 0 0 0 1px rgb(212 175 55 / 0.45);
 }
 
 /* ─── Gold text ─── */

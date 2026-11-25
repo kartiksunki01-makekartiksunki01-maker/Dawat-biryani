@@ -81,7 +81,7 @@ export function OurStory() {
             </li>
           ))}
           <li className="relative grid place-items-center bg-gradient-to-br from-maroon/60 to-smoke p-7 text-center">
-            <p className="font-display text-2xl italic text-gold-gradient">{restaurant.creativeTagline}</p>
+            <p className="font-display text-2xl text-gold-gradient">{restaurant.creativeTagline}</p>
           </li>
         </ul>
       </div>

@@ -3,7 +3,8 @@ import { restaurant } from '../../data/restaurant';
 import { countOf, useCart } from '../../stores/cartStore';
 import { useUI } from '../../stores/uiStore';
 import { asset } from '../../utils/format';
-import { telUrl, whatsappUrl } from '../../utils/order';
+import {telUrl} from '../../utils/order';
+import { WhatsAppLink } from '../ui/WhatsAppLink';
 import { scrollToTarget } from '../../utils/scroll';
 import { ArchOutline, GoldDivider, LightSweep, Magnetic, Reveal, SplitReveal } from '../motion/Motion';
 import { WhatsAppIcon } from '../ui/Bits';
@@ -25,7 +26,7 @@ export function Finale() {
             <p className="t-eyebrow mt-6 text-gold">Chapter V · Your Royal Dawat Awaits</p>
           </Reveal>
           <h2 id="finale-title" className="t-h2 mx-auto mt-5 max-w-4xl font-display text-ivory">
-            <SplitReveal text="Your Next Royal Feast" /> <SplitReveal text="Awaits." wordClassName="italic text-gold-gradient pr-[0.06em]" delay={0.2} />
+            <SplitReveal text="Your Next Royal Feast" /> <SplitReveal text="Awaits." wordClassName="text-gold-gradient" delay={0.2} />
           </h2>
           <GoldDivider className="mx-auto mt-6" />
           <Reveal delay={0.1}>
@@ -43,14 +44,9 @@ export function Finale() {
                 <ShoppingBag size={18} /> {count > 0 ? `Review my order (${count})` : 'Order Now'}
               </button>
             </Magnetic>
-            <a
-              className="btn btn-emerald"
-              href={whatsappUrl(`Namaste! I'd like to place an order enquiry with ${restaurant.name}.`)}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
+            <WhatsAppLink className="btn btn-emerald" text={`Namaste! I'd like to place an order enquiry with ${restaurant.name}.`}>
               <WhatsAppIcon /> WhatsApp
-            </a>
+            </WhatsAppLink>
             <a className="btn btn-ghost" href={telUrl}>
               <Phone size={18} /> {restaurant.phone.display}
             </a>

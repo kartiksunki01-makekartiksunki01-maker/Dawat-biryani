@@ -7,11 +7,14 @@ ScrollTrigger.config({ ignoreMobileResize: true });
 
 let lenis: Lenis | null = null;
 let reduced = false;
+let locks = 0;
 
 export function initSmoothScroll(reducedMotion: boolean) {
   reduced = reducedMotion;
   if (reducedMotion) return () => {};
   lenis = new Lenis({ lerp: 0.085, smoothWheel: true, wheelMultiplier: 0.95 });
+  // the intro may have locked scrolling before Lenis existed — honour that lock
+  if (locks > 0) lenis.stop();
   lenis.on('scroll', ScrollTrigger.update);
   const tick = (time: number) => lenis?.raf(time * 1000);
   gsap.ticker.add(tick);
@@ -60,7 +63,6 @@ export function scrollToTarget(target: string | number, immediate = false) {
   }
 }
 
-let locks = 0;
 export function lockScroll(lock: boolean) {
   locks = Math.max(0, locks + (lock ? 1 : -1));
   const locked = locks > 0;

@@ -4,6 +4,9 @@
  */
 export type SfxName = 'click' | 'lid' | 'chime' | 'whoosh' | 'add';
 
+/** Restaurant's own background track ("Saffron and Gold"), used whenever no track is uploaded in the admin panel. */
+const DEFAULT_TRACK = `${import.meta.env.BASE_URL}assets/audio/saffron-and-gold.mp3`;
+
 class SoundEngine {
   private ctx: AudioContext | null = null;
   private master!: GainNode;
@@ -16,6 +19,136 @@ class SoundEngine {
   private noiseBuffer: AudioBuffer | null = null;
   private enabled = false;
   private volume = 0.6;
+  // background track (uploaded by the restaurant in the admin panel) — plain <audio>, no CORS needed
+  private track: HTMLAudioElement | null = null;
+  private trackUrl: string | null = DEFAULT_TRACK;
+  private fadeTimer: number | null = null;
+  private musicAllowed = true; // admin switch
+  private sfxAllowed = true; //   admin switch
+  private userMusic = true; //    visitor switch
+  private userSfx = true; //      visitor switch
+  private held = false; //        true while the intro video is on screen (its own audio must never overlap ours)
+
+  /** Admin settings from the backend. */
+  configure(o: { musicUrl?: string | null; musicEnabled?: boolean; sfxEnabled?: boolean; defaultVolume?: number }) {
+    if (o.musicEnabled !== undefined) this.musicAllowed = o.musicEnabled;
+    if (o.sfxEnabled !== undefined) this.sfxAllowed = o.sfxEnabled;
+    const url = o.musicUrl === undefined ? undefined : o.musicUrl || DEFAULT_TRACK;
+    if (url !== undefined && url !== this.trackUrl) {
+      this.disposeTrack();
+      this.trackUrl = url;
+    }
+    this.applyMusic();
+  }
+
+  /** Visitor preferences (saved on this device). */
+  setUserPrefs(o: { music: boolean; sfx: boolean }) {
+    this.userMusic = o.music;
+    this.userSfx = o.sfx;
+    this.applyMusic();
+  }
+
+  get hasUploadedTrack() {
+    return !!this.trackUrl && this.trackUrl !== DEFAULT_TRACK;
+  }
+
+  private ensureTrack() {
+    if (!this.track && this.trackUrl) {
+      const a = new Audio();
+      a.src = this.trackUrl;
+      a.loop = true;
+      a.preload = 'auto';
+      a.volume = 0;
+      this.track = a;
+    }
+    return this.track;
+  }
+
+  /** Called inside the visitor's tap while the intro still holds audio: unlocks the track (iOS) silently. */
+  private primeTrack() {
+    const a = this.ensureTrack();
+    if (!a || !a.paused) return;
+    a.muted = true;
+    a.play()
+      .then(() => {
+        if (!this.wantsMusic()) a.pause();
+        a.muted = false;
+      })
+      .catch(() => {
+        a.muted = false;
+      });
+  }
+
+  private wantsMusic() {
+    return this.enabled && !this.held && this.musicAllowed && this.userMusic;
+  }
+
+  /** Silence all site audio (music, ambience, effects) while the intro video plays; release restores it. */
+  setHeld(on: boolean) {
+    if (this.held === on) return;
+    this.held = on;
+    if (this.ctx) this.master.gain.setTargetAtTime(on || !this.enabled ? 0 : this.volume, this.ctx.currentTime, 0.15);
+    this.applyMusic();
+  }
+
+  private applyMusic() {
+    if (!this.ctx && !this.track) {
+      if (!this.enabled) return;
+    }
+    if (this.wantsMusic()) {
+      if (this.trackUrl) {
+        this.stopAmbience();
+        this.playTrack();
+      } else {
+        this.fadeTrack(0, true);
+        this.startAmbience();
+      }
+    } else {
+      this.fadeTrack(0, true);
+      this.stopAmbience();
+    }
+  }
+
+  private playTrack() {
+    const a = this.ensureTrack();
+    if (!a) return;
+    a.muted = false;
+    a.play()
+      .then(() => this.fadeTrack(Math.min(1, this.volume * 0.85), false))
+      .catch(() => {
+        /* autoplay refused or file failed — fall back to the built-in ambience */
+        this.startAmbience();
+      });
+  }
+
+  private fadeTrack(target: number, pauseAtEnd: boolean) {
+    const a = this.track;
+    if (!a) return;
+    if (this.fadeTimer) window.clearInterval(this.fadeTimer);
+    const start = a.volume;
+    const steps = 16;
+    let i = 0;
+    this.fadeTimer = window.setInterval(() => {
+      i++;
+      a.volume = Math.max(0, Math.min(1, start + ((target - start) * i) / steps));
+      if (i >= steps) {
+        if (this.fadeTimer) window.clearInterval(this.fadeTimer);
+        this.fadeTimer = null;
+        if (pauseAtEnd && target === 0) a.pause();
+      }
+    }, 50);
+  }
+
+  private disposeTrack() {
+    if (this.fadeTimer) window.clearInterval(this.fadeTimer);
+    this.fadeTimer = null;
+    if (this.track) {
+      this.track.pause();
+      this.track.removeAttribute('src');
+      this.track.load();
+      this.track = null;
+    }
+  }
 
   private ensure() {
     if (this.ctx) return this.ctx;
@@ -72,27 +205,33 @@ class SoundEngine {
 
   setVolume(v: number) {
     this.volume = v;
-    if (this.ctx && this.enabled) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.1);
+    if (this.ctx && this.enabled && !this.held) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.1);
+    if (this.track && this.wantsMusic() && !this.track.paused) this.fadeTrack(Math.min(1, v * 0.85), false);
   }
 
   async setEnabled(on: boolean) {
     this.enabled = on;
     if (on) {
+      if (this.held && this.musicAllowed && this.userMusic) this.primeTrack();
       const ctx = this.ensure();
       if (!ctx) return;
       if (ctx.state === 'suspended') await ctx.resume();
-      this.master.gain.setTargetAtTime(this.volume, ctx.currentTime, 0.4);
-      this.startAmbience();
-    } else if (this.ctx) {
-      this.master.gain.setTargetAtTime(0, this.ctx.currentTime, 0.15);
-      window.setTimeout(() => {
-        if (!this.enabled) this.stopAmbience();
-      }, 900);
+      this.master.gain.setTargetAtTime(this.held ? 0 : this.volume, ctx.currentTime, 0.4);
+      this.applyMusic();
+    } else {
+      this.fadeTrack(0, true);
+      if (this.ctx) {
+        this.master.gain.setTargetAtTime(0, this.ctx.currentTime, 0.15);
+        window.setTimeout(() => {
+          if (!this.enabled) this.stopAmbience();
+        }, 900);
+      }
     }
   }
 
   /* ── Ambience: a soft tanpura-like drone (Sa–Pa) with gentle plucks ── */
   private startAmbience() {
+    if (!this.ctx) return;
     const ctx = this.ctx;
     if (!ctx || this.droneNodes.length) return;
     const filter = ctx.createBiquadFilter();
@@ -187,7 +326,7 @@ class SoundEngine {
   }
 
   play(name: SfxName) {
-    if (!this.enabled) return;
+    if (!this.enabled || this.held || !this.sfxAllowed || !this.userSfx) return;
     const ctx = this.ensure();
     if (!ctx) return;
     const t = ctx.currentTime;

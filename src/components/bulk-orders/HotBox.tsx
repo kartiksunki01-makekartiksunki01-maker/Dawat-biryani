@@ -44,7 +44,7 @@ export function HotBox() {
         <div className="relative">
           <p className="t-eyebrow text-gold">Special Hot Box</p>
           <h3 className="t-h3 mt-3 font-display text-ivory">
-            Packed to arrive <span className="italic text-gold-gradient">warm and ready.</span>
+            Packed to arrive <span className="text-gold-gradient">warm and ready.</span>
           </h3>
           <p className="mt-4 max-w-lg text-ivory/75">
             {verified && warmHours

@@ -7,7 +7,8 @@ const inr = new Intl.NumberFormat('en-IN', {
 export const formatINR = (value: number) => inr.format(value);
 
 /** Resolve a /public asset path so it works under any base URL. */
-export const asset = (path: string) => `${import.meta.env.BASE_URL}${path.replace(/^\//, '')}`;
+export const asset = (path: string) =>
+  /^https:\/\//.test(path) ? path : `${import.meta.env.BASE_URL}${path.replace(/^\//, '')}`;
 
 export const formatDate = (iso: string) =>
   new Intl.DateTimeFormat('en-IN', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(

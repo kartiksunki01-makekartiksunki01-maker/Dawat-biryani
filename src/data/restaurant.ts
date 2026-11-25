@@ -52,10 +52,10 @@ export const restaurant = {
     display: '+91 98233 24553',
   },
 
-  /** CONFIRM: set to true once the owner confirms this number takes WhatsApp orders. */
+  /** WhatsApp number confirmed by the owner on 25 Nov 2026 (calls stay on the phone number above). */
   whatsapp: {
-    number: '919823324553',
-    confirmed: false,
+    number: '919766888897',
+    confirmed: true,
   },
 
   social: {

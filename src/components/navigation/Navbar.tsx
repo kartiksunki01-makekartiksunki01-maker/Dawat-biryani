@@ -7,7 +7,8 @@ import { useSettings, useUI } from '../../stores/uiStore';
 import { asset } from '../../utils/format';
 import { scrollToTarget } from '../../utils/scroll';
 import { sound } from '../../utils/sound';
-import { telUrl, whatsappUrl } from '../../utils/order';
+import {telUrl} from '../../utils/order';
+import { WhatsAppLink } from '../ui/WhatsAppLink';
 import { useDialog } from '../ui/Sheet';
 import { InstagramIcon, WhatsAppIcon, YouTubeIcon } from '../ui/Bits';
 import { SettingsPanel } from '../ui/SettingsPanel';
@@ -141,6 +142,7 @@ export function Navbar() {
             <button
               type="button"
               onClick={toggleSound}
+              data-sound-toggle
               className="hidden h-11 w-11 place-items-center rounded-full text-ivory/80 transition hover:bg-ivory/10 hover:text-ivory sm:grid"
               aria-pressed={soundOn}
               aria-label={soundOn ? 'Mute sound' : 'Turn sound on'}
@@ -294,14 +296,9 @@ function MobileDrawer({
                 <a className="btn btn-ghost" href={telUrl}>
                   <Phone size={17} /> Call
                 </a>
-                <a
-                  className="btn btn-emerald"
-                  href={whatsappUrl(`Namaste! I'd like to place an order enquiry with ${restaurant.name}.`)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
+                <WhatsAppLink className="btn btn-emerald" text={`Namaste! I'd like to place an order enquiry with ${restaurant.name}.`}>
                   <WhatsAppIcon /> WhatsApp
-                </a>
+                </WhatsAppLink>
               </div>
               <div className="mt-4 flex items-center justify-center gap-4 text-ivory/70">
                 <a href={restaurant.social.instagram} target="_blank" rel="noopener noreferrer" className="grid h-11 w-11 place-items-center" aria-label="Instagram">

@@ -38,8 +38,8 @@ export function SplitReveal({
         <span key={i} aria-hidden className="inline-block overflow-hidden pb-[0.12em] -mb-[0.12em] align-bottom">
           <motion.span
             className={`inline-block will-change-transform ${wordClassName}`}
-            initial={reduced ? false : { y: '110%', rotate: 4 }}
-            animate={inView ? { y: '0%', rotate: 0 } : undefined}
+            initial={reduced ? false : { y: '110%' }}
+            animate={inView ? { y: '0%' } : undefined}
             transition={{ duration: 0.95, ease, delay: delay + i * stagger }}
           >
             {w}

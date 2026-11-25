@@ -91,7 +91,7 @@ export default defineConfig({
   base: './',
   plugins: [react(), tailwindcss(), seoPlugin()],
   build: {
-    rollupOptions: { input: { main: 'index.html', admin: 'admin.html' } },
+    rollupOptions: { input: { main: 'index.html', admin: 'admin.html', track: 'track.html' } },
     target: 'es2022',
     chunkSizeWarningLimit: 1400,
   },

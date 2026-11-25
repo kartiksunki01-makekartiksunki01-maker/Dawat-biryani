@@ -4,8 +4,10 @@ import { useState, type Ref } from 'react';
 import { categories } from '../../data/restaurant';
 import type { MenuItem } from '../../data/types';
 import { useUI } from '../../stores/uiStore';
+import { offerLabel, offersForDish, useStorefront } from '../../data/menuSync';
 import { asset, formatINR } from '../../utils/format';
-import { enquireItemMessage, telUrl, whatsappUrl } from '../../utils/order';
+import {enquireItemMessage, telUrl} from '../../utils/order';
+import { WhatsAppLink } from '../ui/WhatsAppLink';
 import { ArchOutline, Tilt } from '../motion/Motion';
 import { DietMark, QtyStepper } from '../ui/Bits';
 import { useAddToOrder } from './useAddToOrder';
@@ -55,9 +57,14 @@ export function VariantPicker({
 export function MenuCard({ item, index, ref }: { item: MenuItem; index: number; ref?: Ref<HTMLElement> }) {
   const openProduct = useUI((s) => s.openProduct);
   const addToOrder = useAddToOrder();
-  const [variant, setVariant] = useState(item.variants[0]?.id ?? '');
+  const [picked, setVariant] = useState(item.variants[0]?.id ?? '');
+  // the menu can be replaced with live data (new portion ids) after this card mounted
+  const variant = item.variants.some((v) => v.id === picked) ? picked : (item.variants[0]?.id ?? '');
   const [qty, setQty] = useState(1);
   const enquire = item.status === 'enquire';
+  const offers = useStorefront((s) => s.offers);
+  const dishOffers = offersForDish(item, offers);
+  const variantOff = item.variants.find((v) => v.id === variant)?.available === false;
 
   return (
     <motion.article
@@ -101,7 +108,16 @@ export function MenuCard({ item, index, ref }: { item: MenuItem; index: number; 
             <span className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-[#1a120e] to-transparent" aria-hidden />
             <span className="absolute left-3 top-3 flex items-center gap-2">
               <DietMark diet={item.diet} />
+              {item.chefSpecial && <span className="rounded-full bg-gold px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-smoke">Chef’s special</span>}
             </span>
+            {dishOffers.length > 0 && !item.soldOut && (
+              <motion.span initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="absolute bottom-3 left-3 z-10 rounded-full bg-emerald-600/90 px-2.5 py-1 text-[11px] font-semibold text-white shadow">
+                {offerLabel(dishOffers[0])}{dishOffers[0].code ? ` · ${dishOffers[0].code}` : ''}
+              </motion.span>
+            )}
+            {item.soldOut && (
+              <span className="absolute inset-0 z-10 grid place-items-center bg-black/55 text-sm font-semibold uppercase tracking-[0.2em] text-ivory">Sold out today</span>
+            )}
             <span className="absolute right-3 top-3 rounded-full bg-black/50 px-2.5 py-1 text-[10px] uppercase tracking-[0.18em] text-ivory/80 backdrop-blur">
               {categoryLabel(item.category)}
             </span>
@@ -120,14 +136,9 @@ export function MenuCard({ item, index, ref }: { item: MenuItem; index: number; 
               <div className="mt-auto space-y-3">
                 <p className="text-sm text-gold">Price on enquiry</p>
                 <div className="grid grid-cols-2 gap-2">
-                  <a
-                    className="btn btn-emerald btn-sm"
-                    href={whatsappUrl(enquireItemMessage(item.name))}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
+                  <WhatsAppLink className="btn btn-emerald btn-sm" text={enquireItemMessage(item.name)}>
                     <MessageCircle size={16} /> Enquire
-                  </a>
+                  </WhatsAppLink>
                   <a className="btn btn-ghost btn-sm" href={telUrl}>
                     <Phone size={16} /> Call
                   </a>
@@ -141,18 +152,19 @@ export function MenuCard({ item, index, ref }: { item: MenuItem; index: number; 
                   <button
                     type="button"
                     className="btn btn-gold btn-sm flex-1"
+                    disabled={item.soldOut || variantOff}
                     onClick={() => {
                       addToOrder(item.id, variant, qty);
                       setQty(1);
                     }}
                   >
-                    <ShoppingBag size={16} aria-hidden /> Add to Order
+                    <ShoppingBag size={16} aria-hidden /> {item.soldOut ? 'Sold out' : variantOff ? 'Unavailable' : 'Add to Order'}
                   </button>
                 </div>
                 <button
                   type="button"
                   onClick={() => openProduct(item.id)}
-                  className="inline-flex min-h-[36px] items-center gap-1.5 text-xs text-ivory/55 transition hover:text-gold"
+                  className="inline-flex min-h-[40px] items-center gap-1.5 text-xs text-ivory/55 transition hover:text-gold"
                 >
                   <Info size={14} aria-hidden /> Details & instructions
                 </button>
