@@ -1,6 +1,7 @@
 import { Archive, ArchiveRestore, ArrowLeft, CheckCheck, CircleDot, RefreshCw, RotateCcw, Search, Send, Settings2, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useChatAdmin, type ChatSettingsRow, type Conv } from '../chat';
+import { useNotifications } from '../notifications';
 import { Badge, Btn, Card, Confirm, Empty, errText, Field, fmtDT, Input, Notice, PageHeader, Skeleton, Textarea, Toggle, useAdmin } from '../ui';
 
 interface Msg { id: string; sender: 'customer' | 'admin' | 'system'; kind: string | null; body: string; created_at: string }
@@ -11,6 +12,7 @@ const label = (c: Conv) => c.customer_name || `Visitor ${c.id.slice(0, 4).toUppe
 export function LiveChat() {
   const { sb, toast } = useAdmin();
   const chat = useChatAdmin();
+  const notifs = useNotifications();
   const [tab, setTab] = useState<Tab>('active');
   const [q, setQ] = useState('');
   const [sel, setSel] = useState<string | null>(null);
@@ -28,7 +30,10 @@ export function LiveChat() {
     const { error } = await sb.rpc('admin_chat_action', { p: { conversation_id: c.id, action } });
     if (error) { toast(errText(error), 'err'); return; }
     toast(msg); if (action === 'delete') setSel(null); void chat.reload();
-  }, [sb, toast, chat]);
+    if (action === 'read' || action === 'resolve' || action === 'archive') {
+      for (const n of notifs.items) if (n.kind === 'new_chat' && n.conversation_id === c.id && !notifs.readIds.has(n.id)) void notifs.markRead(n.id);
+    }
+  }, [sb, toast, chat, notifs]);
 
   const s = chat.settings;
   return (
@@ -111,6 +116,16 @@ function Thread({ conv, onBack, act, onDelete }: { conv: Conv; onBack: () => voi
   useEffect(() => { void load(); }, [load, chat.tick]);
   useEffect(() => { if (conv.admin_unread > 0) void sb.rpc('admin_chat_action', { p: { conversation_id: conv.id, action: 'read' } }).then(() => chat.reload()); }, [conv.admin_unread, conv.id, sb, chat]);
   useEffect(() => { const el = listRef.current; if (el) el.scrollTop = el.scrollHeight; }, [msgs]);
+  // While this conversation is open, its “New chat message” bell entries are read too (no phantom red badge afterwards)
+  const notifs = useNotifications();
+  const triedNotifs = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    for (const n of notifs.items) {
+      if (n.kind !== 'new_chat' || n.conversation_id !== conv.id || notifs.readIds.has(n.id) || triedNotifs.current.has(n.id)) continue;
+      triedNotifs.current.add(n.id);
+      void notifs.markRead(n.id);
+    }
+  }, [notifs, conv.id]);
 
   const send = async () => {
     const body = (retry.current?.body ?? draft).trim();

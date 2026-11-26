@@ -1,5 +1,5 @@
-import { ArrowDown, ArrowUp, Plus, RefreshCw, Search } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ArrowDown, ArrowUp, Camera, ImagePlus, Loader2, Plus, RefreshCw, Search } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { asset } from '../utils/format';
 import { Badge, Btn, Confirm, Empty, errText, Field, Input, inr, Modal, Notice, PageHeader, Select, Skeleton, Textarea, Toggle, useAdmin } from './ui';
 import { ActionMenu } from './sections/Menu3';
@@ -14,6 +14,37 @@ interface Dish {
 interface Cat { id: string; label: string }
 
 const slug = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 60);
+
+/** Picks a photo (gallery or camera on a phone/tablet), shrinks and uploads it, then hands back the public link. */
+function usePhotoUpload(onDone: (url: string) => void | Promise<void>) {
+  const { sb, toast } = useAdmin();
+  const [uploading, setUploading] = useState(false);
+  const onChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const input = e.currentTarget;
+    const file = input.files?.[0];
+    input.value = '';                                   // lets the same picture be chosen again
+    if (!file) return;
+    setUploading(true);
+    const r = await uploadImage(sb, file, 'dishes');
+    if ('error' in r) { setUploading(false); toast(r.error, 'err'); return; }
+    try { await onDone(r.url); } finally { setUploading(false); }
+  };
+  return { uploading, onChange };
+}
+
+/** Round photo on each menu row: tap it, choose a picture, done — it is saved straight away. */
+function RowPhoto({ dish, onSaved }: { dish: Dish; onSaved: (url: string) => Promise<void> }) {
+  const { uploading, onChange } = usePhotoUpload(onSaved);
+  return (
+    <label className={`group relative block h-14 w-14 shrink-0 overflow-hidden rounded-lg ${dish.archived_at ? 'pointer-events-none' : 'cursor-pointer'} focus-within:ring-2 focus-within:ring-gold`} title={dish.image_path ? 'Change photo' : 'Add photo'}>
+      {dish.image_path ? <img src={asset(dish.image_path)} alt="" className="h-full w-full object-cover" /> : <div className="grid h-full w-full place-items-center bg-white/5 text-[9px] font-semibold uppercase tracking-wide text-ivory/50">No photo</div>}
+      <span className="absolute inset-x-0 bottom-0 grid h-5 place-items-center bg-black/65 text-gold">
+        {uploading ? <Loader2 size={12} className="animate-spin" /> : <Camera size={12} />}
+      </span>
+      <input type="file" accept="image/*" className="sr-only" aria-label={`${dish.image_path ? 'Change' : 'Add'} photo for ${dish.name}`} disabled={uploading || !!dish.archived_at} onChange={(e) => void onChange(e)} />
+    </label>
+  );
+}
 
 export function Dishes() {
   const { sb, toast } = useAdmin();
@@ -86,7 +117,7 @@ export function Dishes() {
                 <button type="button" aria-label={`Move ${d.name} up`} className="grid h-8 w-8 place-items-center rounded hover:bg-white/10 disabled:opacity-30" disabled={i === 0 || !!q} onClick={() => void move(i, -1)}><ArrowUp size={14} /></button>
                 <button type="button" aria-label={`Move ${d.name} down`} className="grid h-8 w-8 place-items-center rounded hover:bg-white/10 disabled:opacity-30" disabled={i === shown.length - 1 || !!q} onClick={() => void move(i, 1)}><ArrowDown size={14} /></button>
               </div>
-              {d.image_path ? <img src={asset(d.image_path)} alt="" className="h-14 w-14 rounded-lg object-cover" /> : <div className="h-14 w-14 rounded-lg bg-white/5" />}
+              <RowPhoto dish={d} onSaved={async (url) => { const { error } = await sb.from('dishes').update({ image_path: url, image_kind: 'photo' }).eq('id', d.id); if (error) toast(errText(error, 'Photo uploaded but could not be saved.'), 'err'); else { toast(`Photo saved for ${d.name}.`); void load(); } }} />
               <button type="button" className="min-w-0 flex-1 text-left" onClick={() => setEdit(d)}>
                 <p className="font-semibold">{d.name}</p>
                 <p className="text-xs text-ivory/55">{d.status === 'enquire' ? 'Price on enquiry' : d.variants.map((v) => `${v.label} ${inr(v.price)}${v.is_available ? '' : ' (off)'}`).join(' · ') || 'No price'}</p>
@@ -143,7 +174,7 @@ function AddDish({ onClose, onAdded, next }: { onClose: () => void; onAdded: (id
     <Modal open onClose={onClose} title="Add dish">
       <div className="space-y-3">
         <Field label="Dish name"><Input value={name} maxLength={120} onChange={(e) => setName(e.target.value)} autoFocus /></Field>
-        <p className="text-xs text-ivory/55">The dish starts hidden. Add prices and details, then switch on “Show on website”.</p>
+        <p className="text-xs text-ivory/55">The dish starts hidden. On the next screen add its photo, prices and details, then switch on “Show on website”.</p>
         <div className="flex justify-end gap-2">
           <Btn onClick={onClose}>Cancel</Btn>
           <Btn tone="gold" busy={busy} disabled={!slug(name)} onClick={async () => {
@@ -164,7 +195,8 @@ function DishForm({ dish, cats, onClose, onSaved }: { dish: Dish; cats: Cat[]; o
   const { sb, toast } = useAdmin();
   const [f, setF] = useState<Dish>(dish);
   const [busy, setBusy] = useState(false);
-  const [uploading, setUploading] = useState(false);
+  const { uploading, onChange } = usePhotoUpload((url) => { setF((s) => ({ ...s, image_path: url, image_kind: 'photo' })); toast('Photo uploaded — press Save to use it.'); });
+  const original = dish.image_kind === 'promotional' ? dish.image_path : null;   // the built-in menu artwork (a real photo replaces it)
   const set = (p: Partial<Dish>) => setF((s) => ({ ...s, ...p }));
   const setVar = (i: number, p: Partial<Variant>) => setF((s) => ({ ...s, variants: s.variants.map((v, n) => (n === i ? { ...v, ...p } : v)) }));
 
@@ -202,6 +234,25 @@ function DishForm({ dish, cats, onClose, onSaved }: { dish: Dish; cats: Cat[]; o
   return (
     <Modal open onClose={onClose} title={`Edit — ${dish.name}`} wide>
       <div className="space-y-4">
+        <div className="rounded-xl border border-gold/30 bg-gold/[0.06] p-3">
+          <p className="mb-2 text-sm font-semibold text-ivory">Dish photo</p>
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="grid h-28 w-40 shrink-0 place-items-center overflow-hidden rounded-xl border border-white/15 bg-black/30">
+              {f.image_path ? <img src={asset(f.image_path)} alt={`Photo of ${f.name}`} className="h-full w-full object-cover" /> : <span className="flex flex-col items-center gap-1 text-xs text-ivory/55"><ImagePlus size={22} /> No photo yet</span>}
+            </div>
+            <div className="min-w-0 flex-1 space-y-2">
+              <label className={`inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-lg bg-gold px-5 text-sm font-semibold text-smoke focus-within:ring-2 focus-within:ring-ivory ${uploading ? 'pointer-events-none opacity-60' : 'hover:brightness-110'}`}>
+                {uploading ? <Loader2 size={16} className="animate-spin" /> : <Camera size={16} />} {uploading ? 'Uploading…' : f.image_path ? 'Change photo' : 'Add photo'}
+                <input type="file" accept="image/*" className="sr-only" aria-label="Choose dish photo" disabled={uploading} onChange={(e) => void onChange(e)} />
+              </label>
+              {f.image_path && f.image_path !== dish.image_path && <p className="text-xs text-emerald-300">New photo ready — press Save to use it.</p>}
+              {f.image_path && f.image_path !== original && !uploading && (
+                <div><Btn tone="quiet" onClick={() => set({ image_path: original, image_kind: original ? dish.image_kind : null })}>{original ? 'Go back to the original picture' : 'Remove photo'}</Btn></div>
+              )}
+              <p className="text-xs text-ivory/55">Choose from gallery or take a new photo. Any normal phone photo works — big ones are made smaller automatically.</p>
+            </div>
+          </div>
+        </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label="Dish name"><Input value={f.name} maxLength={120} onChange={(e) => set({ name: e.target.value })} /></Field>
           <Field label="Category"><Select value={f.category_id ?? ''} onChange={(e) => set({ category_id: e.target.value || null })}><option value="">No category</option>{cats.map((c) => <option key={c.id} value={c.id}>{c.label}</option>)}</Select></Field>
@@ -210,20 +261,6 @@ function DishForm({ dish, cats, onClose, onSaved }: { dish: Dish; cats: Cat[]; o
           <Field label="Spice level" hint="Only if accurate"><Select value={f.spice_level ?? ''} onChange={(e) => set({ spice_level: (Number(e.target.value) || null) as Dish['spice_level'] })}><option value="">Not shown</option><option value="1">Mild</option><option value="2">Medium</option><option value="3">Hot</option></Select></Field>
         </div>
         <Field label="Description" hint="Only write what you are sure about."><Textarea rows={2} maxLength={600} value={f.description} onChange={(e) => set({ description: e.target.value })} /></Field>
-        <Field label="Photo" hint="JPG, PNG or WebP, max 5 MB. A real photo replaces the promotional artwork.">
-          <div className="flex flex-wrap items-center gap-3">
-            {f.image_path && <img src={asset(f.image_path)} alt="" className="h-16 w-24 rounded-lg object-cover" />}
-            <input type="file" accept="image/jpeg,image/png,image/webp" disabled={uploading} className="text-xs" onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              setUploading(true);
-              const r = await uploadImage(sb, file, 'dishes');
-              setUploading(false);
-              if ('error' in r) toast(r.error, 'err'); else { set({ image_path: r.url, image_kind: 'photo' }); toast('Photo uploaded — press Save to use it.'); }
-            }} />
-            {uploading && <span className="text-xs text-ivory/60">Uploading…</span>}
-          </div>
-        </Field>
         <fieldset className="space-y-2">
           <legend className="mb-1 text-xs font-medium text-ivory/60">Portions & prices (₹)</legend>
           {f.variants.map((v, i) => (

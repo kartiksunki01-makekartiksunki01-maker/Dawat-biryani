@@ -72,3 +72,17 @@ The bottom-right corner of the film has a small ✦ sparkle mark. It is part of 
 - **No database, repository or other feature change.**
 
 Tests: intro 64/64, typography 32/32, regression 50/50 (3D checks replaced by static-hero checks), ordering 51/51, admin 39/39, WhatsApp 36/36, chat 37/37 + 2/2, DB 153/153, TypeScript 0 errors.
+
+## V3.5 (owner request, 26 Nov) — admin fixes
+Reported after going live: "can't add dish photos" and "a notification badge shows although there is nothing there". No database change, no new repository.
+
+- **Dish photos.** The only upload control was a small native "Choose file" button inside the dish edit form, easy to miss on a tablet, and any phone photo over 5 MB was refused.
+  - Every row of **Menu Management** now has a photo with a camera badge: tap it, pick a picture (gallery or camera), and it is saved at once.
+  - The dish edit form shows the photo at the top with a large **Add photo / Change photo** button, a **Remove photo** button, and **Go back to the original picture** while editing a built-in picture.
+  - Photos are shrunk in the browser before upload (longest side 1600 px, WebP/JPEG) when larger than about 1.2 MB, so normal 5–15 MB phone photos work. Small pictures are uploaded as chosen. An unreadable file (for example an iPhone HEIC) gives a clear message.
+  - Uses the same existing `images` storage bucket and admin-only upload policy.
+- **Orders badge vs. list.** The red Orders badge counts every pending order from any day, but the Orders page opened on "Today", so two pending orders from the day before were counted yet hidden. **Open orders** now lists every open order from any day (the date filter is disabled for that status, with a one-line explanation). Other statuses still use the date filter.
+- **Chat badge.** Opening a conversation already cleared the Live Chat badge, but its "New chat message" entry stayed unread in the Notifications bell. Opening (or marking read / resolving / archiving) a conversation now marks that entry read too.
+- The two old pending orders in production were not touched; mark them Completed or Cancelled in Orders if they were only tests.
+
+Tests: new `tests/e2e/admin_fixes.py` (30 checks). Run against the previous code it fails 4 of them (orders hidden, date filter, bell count, read record), and passes 30/30 with the fixes.
