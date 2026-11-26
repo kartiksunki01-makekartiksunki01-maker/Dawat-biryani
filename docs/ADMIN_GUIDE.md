@@ -18,6 +18,8 @@ Bill number (jaise `DBH-20261124-0001`) apne aap banta hai, kabhi repeat nahi ho
 - **Mark sold out** — aaj ke liye khatam. Customer add nahi kar payega.
 - Price badalna: dish ke naam par tap → price likho → **Save**. Purane bills par purana price hi rahega.
 - **Add dish** → naam → phir price/photo bharo → "Show on website" on karo.
+- **Dish photo:** Menu list mein har dish ke photo par camera wala chhota patti hai — us par tap karo, gallery se photo chuno ya camera se kheecho, photo turant save ho jaati hai. Dish ke Edit mein bhi upar bada "Add photo / Change photo" button hai. Badi (5 MB se zyada) phone photos apne aap chhoti ho jaati hain.
+- **Orders badge:** "Open orders" mein kisi bhi din ke woh saare orders dikhte hain jo abhi tak complete/cancel nahi hue; red number bhi unhi ko ginta hai.
 - ⋮ (teen dots) se: chhupana, chef's special, archive, delete.
 
 ## Coupons & Discounts

@@ -97,8 +97,11 @@ export function Orders({ billsMode = false }: { billsMode?: boolean }) {
 
   const load = useCallback(async () => {
     let query = sb.from('orders').select(ORDER_COLS).order('created_at', { ascending: false }).limit(500);
-    if (dates[0]) query = query.gte('order_date', dates[0]);
-    if (dates[1]) query = query.lte('order_date', dates[1]);
+    // "Open orders" means everything still waiting for action — from ANY day (the red badge counts them the same way)
+    if (status !== 'open') {
+      if (dates[0]) query = query.gte('order_date', dates[0]);
+      if (dates[1]) query = query.lte('order_date', dates[1]);
+    }
     if (!showArchived) query = query.is('archived_at', null);
     const { data, error } = await query;
     setLoading(false);
@@ -107,7 +110,7 @@ export function Orders({ billsMode = false }: { billsMode?: boolean }) {
       setErr('');
       setRows((data as unknown as OrderRow[]).map((o) => ({ ...o, total: Number(o.total), subtotal: Number(o.subtotal), discount: Number(o.discount), delivery_charge: Number(o.delivery_charge), tax: Number(o.tax) })));
     }
-  }, [sb, dates, showArchived]);
+  }, [sb, dates, showArchived, status]);
 
   useEffect(() => { void load(); }, [load, orderTick]);
 
@@ -159,7 +162,7 @@ export function Orders({ billsMode = false }: { billsMode?: boolean }) {
             <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ivory/40" />
             <Input className="pl-9" placeholder={billsMode ? 'Bill number (e.g. DBH-20261124-0001)' : 'Bill no., order ID, name or phone'} value={q} onChange={(e) => setQ(e.target.value)} />
           </label>
-          <Select value={range} onChange={(e) => setRange(e.target.value as typeof range)} aria-label="Date range" className="md:w-40">
+          <Select value={range} onChange={(e) => setRange(e.target.value as typeof range)} aria-label="Date range" disabled={status === 'open'} title={status === 'open' ? 'Open orders are shown from every day' : undefined} className="md:w-40 disabled:opacity-50">
             {RANGES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
           </Select>
           <Select value={status} onChange={(e) => setStatus(e.target.value as typeof status)} aria-label="Status" className="md:w-48">
@@ -168,7 +171,8 @@ export function Orders({ billsMode = false }: { billsMode?: boolean }) {
             {(Object.keys(STATUS_LABEL) as OrderStatus[]).map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
           </Select>
         </div>
-        {range === 'custom' && (
+        {status === 'open' && <p className="mt-2 text-xs text-ivory/55">Showing every order still waiting for action, from any day. Choose another status to filter by date.</p>}
+        {status !== 'open' && range === 'custom' && (
           <div className="mt-3 grid grid-cols-2 gap-3 sm:w-96">
             <Field label="From"><Input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} /></Field>
             <Field label="To"><Input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} /></Field>

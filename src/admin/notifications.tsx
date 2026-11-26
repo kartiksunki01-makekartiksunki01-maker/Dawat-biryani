@@ -12,6 +12,7 @@ export interface Notif {
   body: string;
   order_id: string | null;
   lead_id: string | null;
+  conversation_id?: string | null;
   created_at: string;
 }
 
