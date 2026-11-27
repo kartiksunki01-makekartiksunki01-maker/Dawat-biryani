@@ -2,6 +2,7 @@ import { Archive, ArchiveRestore, ArrowLeft, CheckCheck, CircleDot, RefreshCw, R
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useChatAdmin, type ChatSettingsRow, type Conv } from '../chat';
 import { useNotifications } from '../notifications';
+import { BulkDeleteDialog, SelectBox, SelectionBar, useSelection } from '../selection';
 import { Badge, Btn, Card, Confirm, Empty, errText, Field, fmtDT, Input, Notice, PageHeader, Skeleton, Textarea, Toggle, useAdmin } from '../ui';
 
 interface Msg { id: string; sender: 'customer' | 'admin' | 'system'; kind: string | null; body: string; created_at: string }
@@ -22,6 +23,8 @@ export function LiveChat() {
   const list = useMemo(() => chat.convs.filter((c) => (tab === 'active' ? c.status === 'open' : c.status === tab))
     .filter((c) => !q.trim() || `${label(c)} ${c.last_message_preview}`.toLowerCase().includes(q.trim().toLowerCase())), [chat.convs, tab, q]);
   const current = chat.convs.find((c) => c.id === sel) ?? null;
+  const pick = useSelection(list.map((c) => c.id));
+  const [delMany, setDelMany] = useState(false);
   const counts = useMemo(() => ({
     active: chat.convs.filter((c) => c.status === 'open').length, resolved: chat.convs.filter((c) => c.status === 'resolved').length, archived: chat.convs.filter((c) => c.status === 'archived').length,
   }), [chat.convs]);
@@ -70,9 +73,14 @@ export function LiveChat() {
             ))}
           </div>
           {chat.loading ? <Skeleton rows={4} /> : !list.length ? <Empty title={q ? 'No match' : `No ${tab} conversations`}>{tab === 'active' && !q ? 'New customer messages appear here instantly.' : ''}</Empty> : (
+            <>
+            <SelectionBar sel={pick} selectableIds={list.map((c) => c.id)} noun="chat">
+              <Btn tone="danger" onClick={() => setDelMany(true)}><Trash2 size={16} /> Delete…</Btn>
+            </SelectionBar>
             <ul className="space-y-1.5" data-testid="conv-list">
               {list.map((c) => (
-                <li key={c.id}>
+                <li key={c.id} className="flex items-stretch gap-1">
+                  <SelectBox checked={pick.has(c.id)} onChange={(v) => pick.toggle(c.id, v)} label={`Select chat with ${label(c)}`} />
                   <button type="button" onClick={() => setSel(c.id)} aria-current={sel === c.id} className={`w-full rounded-xl border p-3 text-left transition ${sel === c.id ? 'border-gold/50 bg-gold/10' : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.06]'}`}>
                     <div className="flex items-center justify-between gap-2">
                       <span className="truncate text-sm font-semibold">{label(c)}</span>
@@ -84,7 +92,17 @@ export function LiveChat() {
                 </li>
               ))}
             </ul>
+            </>
           )}
+          <BulkDeleteDialog open={delMany} onClose={() => setDelMany(false)} title="Delete conversations permanently?" ids={pick.ids}
+            sample={list.filter((c) => pick.has(c.id)).map((c) => `${label(c)} — ${c.last_message_preview || '…'}`)}
+            explain={<>All messages in these conversations are deleted. A customer who returns starts a fresh chat.</>}
+            run={async (chunk) => {
+              const { data, error } = await sb.rpc('admin_delete_conversations', { p_ids: chunk });
+              if (error) throw new Error(errText(error));
+              return { deleted: Number(data), skipped: [] };
+            }}
+            onDone={() => { if (sel && pick.has(sel)) setSel(null); pick.clear(); void chat.reload(); }} />
         </div>
 
         <div className={!sel ? 'hidden lg:block' : ''}>

@@ -2,7 +2,8 @@ import { Copy, Download, RefreshCw, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { trackUrl } from '../../lib/myOrders';
 import { copyText } from '../../utils/order';
-import { LEAD_STATUSES, LeadCard, useLeads, type Lead } from '../Leads';
+import { LEAD_STATUSES, LeadBulkDelete, LeadCard, useLeads, type Lead } from '../Leads';
+import { useSelection } from '../selection';
 import { Badge, Btn, Confirm, downloadCsv, Empty, errText, Field, Input, inr, istToday, Modal, Notice, PageHeader, Select, Skeleton, Stat, useAdmin } from '../ui';
 import { BulkMenu } from './BulkMenu';
 
@@ -51,7 +52,7 @@ const fmtWhen = (p: BulkPayloadV2) => {
 
 function BulkEnquiries() {
   const { sb, toast, go } = useAdmin();
-  const { rows, err, load, patch, remove } = useLeads(['bulk']);
+  const { rows, err, load, patch, remove, removeMany, more } = useLeads(['bulk']);
   const [showArchived, setShowArchived] = useState(false);
   const [status, setStatus] = useState('all');
   const [q, setQ] = useState('');
@@ -65,6 +66,7 @@ function BulkEnquiries() {
     return (rows ?? []).filter((r) => (showArchived || !r.archived_at) && (status === 'all' || r.status === status) &&
       (!n || `${r.name ?? ''} ${r.phone ?? ''} ${(linesOf(r) ?? []).map((l) => l.name).join(' ')} ${(r.payload as BulkPayloadV2).variety ?? ''}`.toLowerCase().includes(n)));
   }, [rows, showArchived, status, q]);
+  const sel = useSelection(shown.map((r) => r.id));
 
   const exportCsv = () => {
     const out: unknown[][] = [];
@@ -104,13 +106,17 @@ function BulkEnquiries() {
         <Btn tone="gold" disabled={!shown.length} onClick={exportCsv}><Download size={16} /> Export CSV</Btn>
       </div>
       {err && <Notice kind="err">{err}</Notice>}
+      <LeadBulkDelete sel={sel} shown={shown} removeMany={removeMany} noun="bulk enquiry" />
       {!rows ? <Skeleton rows={3} /> : !shown.length ? <Empty title="No bulk enquiries">New bulk & special order enquiries from the website appear here.</Empty> : (
+        <>
         <ul className="space-y-3">
           {shown.map((r) => (
-            <LeadCard key={r.id} r={r} patch={patch} onDelete={() => setDel(r)}
+            <LeadCard key={r.id} r={r} patch={patch} onDelete={() => setDel(r)} sel={sel}
               extra={<BulkDetails r={r} patch={patch} onConvert={() => setConvert(r)} onReject={() => setReject(r)} goOrders={() => go('orders')} />} />
           ))}
         </ul>
+        {more && <div className="mt-4 text-center"><Btn onClick={more}>Load 100 more</Btn></div>}
+        </>
       )}
       <Confirm open={!!convert} onClose={() => setConvert(null)} busy={busy} title="Create an order from this quotation?"
         body={<div className="space-y-2">

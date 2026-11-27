@@ -22,7 +22,7 @@ export function Finale() {
         <div className="pointer-events-none absolute inset-4 rounded-[2rem] ring-1 ring-gold/25" aria-hidden />
         <div className="relative">
           <Reveal>
-            <img src={asset('assets/images/logo-256.png')} alt="" className="mx-auto h-24 w-24 drop-shadow-[0_0_30px_rgba(212,175,55,0.45)]" />
+            <img src={asset('assets/images/logo-256.webp')} alt="" className="mx-auto h-24 w-24 drop-shadow-[0_0_30px_rgba(212,175,55,0.45)]" />
             <p className="t-eyebrow mt-6 text-gold">Chapter V · Your Royal Dawat Awaits</p>
           </Reveal>
           <h2 id="finale-title" className="t-h2 mx-auto mt-5 max-w-4xl font-display text-ivory">

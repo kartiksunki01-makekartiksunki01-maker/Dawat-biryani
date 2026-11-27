@@ -1,8 +1,9 @@
-import { Download, RefreshCw, Search } from 'lucide-react';
+import { Download, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNotifications } from './notifications';
 import { Badge, Btn, Confirm, downloadCsv, Empty, errText, fmtDT, Input, istToday, Notice, PageHeader, Select, Skeleton, Stat, Textarea, useAdmin, waLink } from './ui';
 import { ActionMenu } from './sections/Menu3';
+import { BulkDeleteDialog, SelectBox, SelectionBar, useSelection, type Selection } from './selection';
 
 export interface Lead {
   id: string;
@@ -26,13 +27,14 @@ export function useLeads(kinds: Lead['kind'][]) {
   const { orderTick } = useNotifications();
   const [rows, setRows] = useState<Lead[] | null>(null);
   const [err, setErr] = useState('');
+  const [pageSize, setPageSize] = useState(100);
   const load = useCallback(async () => {
-    const { data, error } = await sb.from('leads').select('*').in('kind', kinds).order('created_at', { ascending: false }).limit(500);
+    const { data, error } = await sb.from('leads').select('*').in('kind', kinds).order('created_at', { ascending: false }).limit(pageSize);
     if (error) { setErr(errText(error, 'Could not load enquiries.')); return; }
     setErr('');
     setRows((data as Lead[]).map((l) => ({ ...l, quote_amount: l.quote_amount == null ? null : Number(l.quote_amount) })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sb, kinds.join(',')]);
+  }, [sb, kinds.join(','), pageSize]);
   useEffect(() => { void load(); }, [load, orderTick]);
   const patch = async (id: string, p: Partial<Lead>, msg = 'Saved.') => {
     const { error } = await sb.from('leads').update(p).eq('id', id);
@@ -48,11 +50,45 @@ export function useLeads(kinds: Lead['kind'][]) {
     setRows((rs) => rs?.filter((r) => r.id !== id) ?? null);
     return true;
   };
-  return { rows, err, load, patch, remove };
+  /** permanent delete of many enquiries (RLS: admins only); linked orders and bills stay */
+  const removeMany = async (ids: string[]) => {
+    const { data, error } = await sb.from('leads').delete().in('id', ids).select('id');
+    if (error) throw new Error(errText(error));
+    const gone = new Set((data as { id: string }[]).map((x) => x.id));
+    setRows((rs) => rs?.filter((r) => !gone.has(r.id)) ?? null);
+    return gone.size;
+  };
+  const more = rows && rows.length >= pageSize ? () => setPageSize((n) => n + 100) : null;
+  return { rows, err, load, patch, remove, removeMany, more };
+}
+
+export const leadCsv = (rows: Lead[], name: string) =>
+  downloadCsv(name, ['Date', 'Type', 'Name', 'Phone', 'Status', 'Quotation', 'Notes', 'Message'], rows.map((r) => [r.created_at, KIND_LABEL[r.kind], r.name, r.phone, r.status, r.quote_amount, r.notes, r.message]));
+
+/** Select bar + permanent bulk delete for a list of enquiries. */
+export function LeadBulkDelete({ sel, shown, removeMany, noun = 'enquiry' }: { sel: Selection; shown: Lead[]; removeMany: (ids: string[]) => Promise<number>; noun?: string }) {
+  const [open, setOpen] = useState(false);
+  const picked = shown.filter((r) => sel.has(r.id));
+  return (
+    <>
+      {shown.length > 0 && (
+        <SelectionBar sel={sel} selectableIds={shown.map((r) => r.id)} noun={noun}>
+          <Btn onClick={() => leadCsv(picked, `dawat-selected-enquiries-${istToday()}.csv`)}><Download size={16} /> CSV of selected</Btn>
+          <Btn tone="danger" onClick={() => setOpen(true)}><Trash2 size={16} /> Delete permanently…</Btn>
+        </SelectionBar>
+      )}
+      <BulkDeleteDialog open={open} onClose={() => setOpen(false)} title="Delete enquiries permanently?" ids={sel.ids}
+        sample={picked.map((r) => `${r.name ?? 'No name'} · ${r.phone ?? 'no phone'} · ${KIND_LABEL[r.kind]} · ${r.status}`)}
+        explain={<>The enquiries, their phone numbers and notes are removed. Orders already created from an enquiry stay, with their bill numbers.</>}
+        onCsv={() => leadCsv(picked, `dawat-enquiries-before-delete-${istToday()}.csv`)}
+        run={async (chunk) => ({ deleted: await removeMany(chunk), skipped: [] })}
+        onDone={() => sel.clear()} />
+    </>
+  );
 }
 
 export function Leads() {
-  const { rows, err, load, patch, remove } = useLeads(['cart', 'contact']);
+  const { rows, err, load, patch, remove, removeMany, more } = useLeads(['cart', 'contact']);
   const [status, setStatus] = useState('all');
   const [q, setQ] = useState('');
   const [showArchived, setShowArchived] = useState(false);
@@ -62,13 +98,14 @@ export function Leads() {
     const n = q.trim().toLowerCase();
     return (rows ?? []).filter((r) => (showArchived || !r.archived_at) && (status === 'all' || r.status === status) && (!n || `${r.name ?? ''} ${r.phone ?? ''} ${r.message ?? ''}`.toLowerCase().includes(n)));
   }, [rows, status, q, showArchived]);
+  const sel = useSelection(shown.map((r) => r.id));
 
   return (
     <section aria-label="Enquiries and leads">
       <PageHeader title="Enquiries & Leads" intro="Messages and order enquiries that were not placed as online orders (including enquiries sent from the previous website version)."
         actions={<>
           <Btn onClick={() => void load()}><RefreshCw size={16} /> Refresh</Btn>
-          <Btn tone="gold" disabled={!shown.length} onClick={() => downloadCsv(`dawat-enquiries-${istToday()}.csv`, ['Date', 'Type', 'Name', 'Phone', 'Status', 'Notes', 'Message'], shown.map((r) => [r.created_at, KIND_LABEL[r.kind], r.name, r.phone, r.status, r.notes, r.message]))}><Download size={16} /> Export CSV</Btn>
+          <Btn tone="gold" disabled={!shown.length} onClick={() => leadCsv(shown, `dawat-enquiries-${istToday()}.csv`)}><Download size={16} /> Export CSV</Btn>
         </>} />
       {rows && (
         <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -87,8 +124,12 @@ export function Leads() {
         <label className="flex items-center gap-2 text-xs text-ivory/60"><input type="checkbox" className="h-4 w-4 accent-[#D4AF37]" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Show archived</label>
       </div>
       {err && <Notice kind="err">{err}</Notice>}
+      <LeadBulkDelete sel={sel} shown={shown} removeMany={removeMany} />
       {!rows ? <Skeleton rows={3} /> : !shown.length ? <Empty title="No enquiries">New enquiries from the website appear here.</Empty> : (
-        <ul className="space-y-3">{shown.map((r) => <LeadCard key={r.id} r={r} patch={patch} onDelete={() => setDel(r)} />)}</ul>
+        <>
+          <ul className="space-y-3">{shown.map((r) => <LeadCard key={r.id} r={r} patch={patch} onDelete={() => setDel(r)} sel={sel} />)}</ul>
+          {more && <div className="mt-4 text-center"><Btn onClick={more}>Load 100 more</Btn></div>}
+        </>
       )}
       <Confirm open={!!del} onClose={() => setDel(null)} danger title="Delete this enquiry?"
         body={<p>The enquiry from {del?.name ?? 'this customer'} and their phone number will be deleted permanently. Online orders are not affected.</p>}
@@ -97,16 +138,19 @@ export function Leads() {
   );
 }
 
-export function LeadCard({ r, patch, onDelete, extra }: { r: Lead; patch: (id: string, p: Partial<Lead>, msg?: string) => Promise<boolean>; onDelete: () => void; extra?: React.ReactNode }) {
+export function LeadCard({ r, patch, onDelete, extra, sel }: { r: Lead; patch: (id: string, p: Partial<Lead>, msg?: string) => Promise<boolean>; onDelete: () => void; extra?: React.ReactNode; sel?: Selection }) {
   const [open, setOpen] = useState(false);
   const [notes, setNotes] = useState(r.notes ?? '');
   const wa = waLink(r.phone, `Namaste ${r.name ?? ''}, this is Dawat Biryani House about your enquiry.`);
   return (
     <li className={`rounded-xl border border-white/10 bg-white/[0.03] p-4 ${r.archived_at ? 'opacity-60' : ''}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-1">
+        {sel && <SelectBox checked={sel.has(r.id)} onChange={(v) => sel.toggle(r.id, v)} label={`Select enquiry from ${r.name ?? 'customer'}`} />}
         <div>
           <p className="font-semibold">{r.name || 'No name'} <Badge tone="gold">{KIND_LABEL[r.kind]}</Badge> {r.status === 'new' && <Badge tone="warn">new</Badge>} {r.archived_at && <Badge>Archived</Badge>}</p>
           <p className="text-xs text-ivory/50">{fmtDT(r.created_at)} · <span className="font-num">{r.phone || 'No phone'}</span></p>
+        </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {r.phone && <a className="inline-flex min-h-[40px] items-center rounded-lg border border-white/20 px-3 text-sm hover:bg-white/10" href={`tel:+91${r.phone.replace(/\D/g, '').slice(-10)}`}>Call</a>}
@@ -117,7 +161,7 @@ export function LeadCard({ r, patch, onDelete, extra }: { r: Lead; patch: (id: s
           <ActionMenu label={`Actions for enquiry from ${r.name ?? 'customer'}`} items={[
             { label: open ? 'Hide details' : 'Show message & notes', onClick: () => setOpen(!open) },
             r.archived_at ? { label: 'Restore', onClick: () => void patch(r.id, { archived_at: null }, 'Restored.') } : { label: 'Archive', onClick: () => void patch(r.id, { archived_at: new Date().toISOString() }, 'Archived.') },
-            { label: 'Delete…', onClick: onDelete, danger: true },
+            { label: 'Delete permanently…', onClick: onDelete, danger: true },
           ]} />
         </div>
       </div>

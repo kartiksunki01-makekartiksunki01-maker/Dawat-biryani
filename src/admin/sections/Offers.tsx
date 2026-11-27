@@ -1,6 +1,7 @@
-import { Eye, Plus, RefreshCw } from 'lucide-react';
+import { Download, Eye, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { Badge, Btn, Confirm, Empty, errText, Field, fmtDT, Input, inr, Modal, Notice, PageHeader, Select, Skeleton, Textarea, Toggle, useAdmin } from '../ui';
+import { Badge, Btn, Confirm, downloadCsv, Empty, errText, Field, fmtDT, Input, inr, istToday, Modal, Notice, PageHeader, Select, Skeleton, Textarea, Toggle, useAdmin } from '../ui';
+import { BulkDeleteDialog, removeUnusedUploads, SelectBox, SelectionBar, useSelection } from '../selection';
 import { ActionMenu } from './Menu3';
 import { uploadImage } from './upload';
 
@@ -58,7 +59,26 @@ export function Offers() {
     if (error) toast(errText(error), 'err'); else { toast(msg); void load(); }
   };
 
-  const shown = (rows ?? []).filter((o) => showArchived || !o.archived_at);
+  const [stateFilter, setStateFilter] = useState('all');
+  const [delMany, setDelMany] = useState(false);
+  // "Expired" means the end date has passed, whether or not the coupon was also switched off
+  const matches = (o: Offer) => stateFilter === 'all' || (stateFilter === 'Expired' ? !!o.ends_at && new Date(o.ends_at) <= new Date() : offerState(o).label === stateFilter);
+  const shown = (rows ?? []).filter((o) => (showArchived || stateFilter === 'Archived' || !o.archived_at) && matches(o));
+  const sel = useSelection(shown.map((o) => o.id));
+  const picked = shown.filter((o) => sel.has(o.id));
+  const offerCsv = (list: Offer[], name: string) => downloadCsv(name, ['Title', 'Code', 'Type', 'Value', 'Max discount', 'Min order', 'Starts', 'Ends', 'Used', 'Usage limit', 'Discount given', 'State'],
+    list.map((o) => [o.title, o.code, o.discount_type, o.discount_value, o.max_discount, o.min_order, o.starts_at, o.ends_at, o.used_count, o.usage_limit, given[o.id] ?? 0, offerState(o).label]));
+  /** live + used coupons are switched off first (bills keep their code and discount), then deleted */
+  const deleteOffer = async (o: Offer) => {
+    if (offerState(o).label === 'Live' && o.used_count) {
+      const off = await sb.from('offers').update({ is_active: false }).eq('id', o.id);
+      if (off.error) return errText(off.error);
+    }
+    const { error } = await sb.from('offers').delete().eq('id', o.id);
+    if (error) return errText(error);
+    await removeUnusedUploads(sb, [o.banner_url]);
+    return '';
+  };
   return (
     <section aria-label="Coupons and discounts">
       <PageHeader title="Coupons & Discounts" intro="Create coupon codes and automatic offers. Every discount is checked by the database at checkout — expired, used-up or invalid coupons are refused with a clear reason."
@@ -67,7 +87,13 @@ export function Offers() {
           <a className="inline-flex min-h-[40px] items-center gap-2 rounded-lg border border-white/20 px-4 text-sm font-semibold hover:bg-white/10" href="./#offers" target="_blank" rel="noopener noreferrer"><Eye size={16} /> Preview on website</a>
           <Btn tone="gold" onClick={() => setDraft({ ...blank })}><Plus size={16} /> Create coupon</Btn>
         </>} />
-      <label className="mb-4 flex items-center gap-2 text-xs text-ivory/60"><input type="checkbox" className="h-4 w-4 accent-[#D4AF37]" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Show archived</label>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <Select aria-label="Coupon state" value={stateFilter} onChange={(e) => setStateFilter(e.target.value)} className="!w-44">
+          <option value="all">All coupons</option>
+          {['Live', 'Scheduled', 'Expired', 'Used up', 'Inactive', 'Archived'].map((x) => <option key={x} value={x}>{x}</option>)}
+        </Select>
+        <label className="flex items-center gap-2 text-xs text-ivory/60"><input type="checkbox" className="h-4 w-4 accent-[#D4AF37]" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Show archived</label>
+      </div>
       {err && <Notice kind="err">{err}</Notice>}
       {rows && (
         <dl className="mb-4 grid grid-cols-3 gap-2 text-center" aria-label="Coupon summary">
@@ -76,16 +102,24 @@ export function Offers() {
           <div className="rounded-xl border border-white/10 p-3"><dt className="text-[11px] text-ivory/60">Discount given</dt><dd className="font-num text-xl text-gold" data-testid="stat-given">{inr(Object.values(given).reduce((a, b) => a + b, 0))}</dd></div>
         </dl>
       )}
-      {!rows ? <Skeleton rows={3} /> : !shown.length ? <Empty title="No coupons yet">Create one with “Create coupon”. It stays inactive until you switch it on.</Empty> : (
+      {!rows ? <Skeleton rows={3} /> : !shown.length ? <Empty title="No coupons here">Create one with “Create coupon”. It stays inactive until you switch it on.</Empty> : (
+        <>
+        <SelectionBar sel={sel} selectableIds={shown.map((o) => o.id)} noun="coupon">
+          <Btn onClick={() => offerCsv(picked, `dawat-selected-coupons-${istToday()}.csv`)}><Download size={16} /> CSV of selected</Btn>
+          <Btn tone="danger" onClick={() => setDelMany(true)}><Trash2 size={16} /> Delete permanently…</Btn>
+        </SelectionBar>
         <ul className="grid gap-3 md:grid-cols-2">
           {shown.map((o) => {
             const st = offerState(o);
             return (
               <li key={o.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
                 <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-1">
+                  <SelectBox checked={sel.has(o.id)} onChange={(v) => sel.toggle(o.id, v)} label={`Select coupon ${o.title}`} />
                   <div>
                     <p className="font-semibold">{o.title}</p>
                     <p className="text-sm text-gold">{o.discount_type === 'percent' ? `${o.discount_value}% off` : `${inr(o.discount_value)} off`}{o.max_discount ? ` (max ${inr(o.max_discount)})` : ''}</p>
+                  </div>
                   </div>
                   <ActionMenu label={`Actions for ${o.title}`} items={[
                     { label: 'Edit', onClick: () => setDraft({ ...o }) },
@@ -93,7 +127,7 @@ export function Offers() {
                     { label: 'Duplicate', onClick: () => setDraft({ ...o, id: undefined, title: `${o.title} (copy)`.slice(0, 80), code: null, is_active: false }) },
                     o.is_active ? { label: 'Deactivate', onClick: () => void patch(o, { is_active: false }, 'Offer deactivated.') } : { label: 'Activate', onClick: () => void patch(o, { is_active: true }, 'Offer activated.'), disabled: !!o.archived_at },
                     o.archived_at ? { label: 'Restore', onClick: () => void patch(o, { archived_at: null }, 'Offer restored.') } : { label: 'Archive', onClick: () => void patch(o, { archived_at: new Date().toISOString(), is_active: false }, 'Offer archived.') },
-                    { label: 'Delete…', onClick: () => setDel(o), danger: true },
+                    { label: 'Delete permanently…', onClick: () => setDel(o), danger: true },
                   ]} />
                 </div>
                 <div className="mt-2 flex flex-wrap gap-1">
@@ -110,18 +144,34 @@ export function Offers() {
             );
           })}
         </ul>
+        </>
       )}
       {usage && <UsageModal offer={usage} total={given[usage.id] ?? 0} onClose={() => setUsage(null)} />}
       {draft && <OfferForm draft={draft} onClose={() => setDraft(null)} onSaved={() => { setDraft(null); void load(); }} />}
-      <Confirm open={!!del} onClose={() => setDel(null)} danger title="Delete offer?"
-        body={del?.used_count ? <p>This offer was used {del.used_count} time(s). To keep a correct history it can’t be deleted — archive it instead.</p> : <p>“{del?.title}” has never been used and will be deleted permanently.</p>}
-        confirmLabel={del?.used_count ? 'Archive instead' : 'Delete'}
+      <BulkDeleteDialog open={delMany} onClose={() => setDelMany(false)} title="Delete coupons permanently?" ids={sel.ids} batch={10}
+        sample={picked.map((o) => `${o.title}${o.code ? ` (${o.code})` : ''} · ${offerState(o).label} · used ${o.used_count}×`)}
+        explain={<>The coupons are removed for good. Bills that used them keep the coupon code and the discount amount. A live coupon that was used is switched off first, then deleted.</>}
+        onCsv={() => offerCsv(picked, `dawat-coupons-before-delete-${istToday()}.csv`)}
+        run={async (chunk) => {
+          let deleted = 0; const skipped: { label: string; reason: string }[] = [];
+          for (const id of chunk) {
+            const o = (rows ?? []).find((x) => x.id === id);
+            if (!o) continue;
+            const e = await deleteOffer(o);
+            if (e) skipped.push({ label: o.title, reason: e }); else deleted++;
+          }
+          return { deleted, skipped };
+        }}
+        onDone={() => { sel.clear(); void load(); }} />
+      <Confirm open={!!del} onClose={() => setDel(null)} danger title="Delete coupon permanently?"
+        body={del?.used_count
+          ? <p>“{del.title}” was used {del.used_count} time(s). Those bills keep the coupon code and discount. {offerState(del).label === 'Live' ? 'It is live now, so it will be switched off first. ' : ''}The coupon itself is deleted for good.</p>
+          : <p>“{del?.title}” has never been used and will be deleted permanently.</p>}
+        confirmLabel={del?.used_count && offerState(del).label === 'Live' ? 'Switch off & delete' : 'Delete permanently'}
         onConfirm={async () => {
           if (!del) return;
-          const { error } = del.used_count
-            ? await sb.from('offers').update({ archived_at: new Date().toISOString(), is_active: false }).eq('id', del.id)
-            : await sb.from('offers').delete().eq('id', del.id);
-          if (error) toast(errText(error), 'err'); else { toast(del.used_count ? 'Offer archived.' : 'Offer deleted.'); setDel(null); void load(); }
+          const e = await deleteOffer(del);
+          if (e) toast(e, 'err'); else { toast('Coupon deleted.'); setDel(null); void load(); }
         }} />
     </section>
   );

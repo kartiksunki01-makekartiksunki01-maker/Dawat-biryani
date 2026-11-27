@@ -1,4 +1,4 @@
-import { Archive, Download, Phone, Printer, RefreshCw, Search, Undo2 } from 'lucide-react';
+import { Archive, Download, Pencil, Phone, Printer, RefreshCw, Search, Trash2, Undo2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PAYMENT_LABEL, STATUS_LABEL, type OrderJSON, type OrderStatus } from '../../lib/api';
 import { downloadReceiptPdf, printReceipt } from '../../lib/receipt';
@@ -7,6 +7,7 @@ import {
   addDays, Badge, Btn, Card, Confirm, downloadCsv, Empty, errText, Field, fmtDT, Input, inr, istToday, Modal, Notice, PageHeader,
   Select, Skeleton, Textarea, useAdmin, waLink,
 } from '../ui';
+import { BulkDeleteDialog, SelectBox, SelectionBar, useSelection } from '../selection';
 
 export interface OrderRow {
   id: string;
@@ -66,6 +67,7 @@ const RANGES = [
 ] as const;
 
 const SEEN_KEY = 'dawat-admin-seen-orders';
+const FINISHED: OrderStatus[] = ['completed', 'cancelled', 'rejected'];
 const seenSet = () => { try { return new Set<string>(JSON.parse(localStorage.getItem(SEEN_KEY) ?? '[]')); } catch { return new Set<string>(); } };
 
 export function Orders({ billsMode = false }: { billsMode?: boolean }) {
@@ -77,11 +79,12 @@ export function Orders({ billsMode = false }: { billsMode?: boolean }) {
   const [range, setRange] = useState<(typeof RANGES)[number]['id']>(billsMode ? '30d' : 'today');
   const [from, setFrom] = useState(istToday());
   const [to, setTo] = useState(istToday());
-  const [status, setStatus] = useState<'all' | 'open' | OrderStatus>(billsMode ? 'all' : 'open');
+  const [status, setStatus] = useState<'all' | 'open' | 'finished' | OrderStatus>(billsMode ? 'all' : 'open');
   const [q, setQ] = useState('');
   const [showArchived, setShowArchived] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [seen, setSeen] = useState(seenSet);
+  const [pageSize, setPageSize] = useState(100);
 
   const dates = useMemo(() => {
     const t = istToday();
@@ -96,7 +99,7 @@ export function Orders({ billsMode = false }: { billsMode?: boolean }) {
   }, [range, from, to]);
 
   const load = useCallback(async () => {
-    let query = sb.from('orders').select(ORDER_COLS).order('created_at', { ascending: false }).limit(500);
+    let query = sb.from('orders').select(ORDER_COLS).order('created_at', { ascending: false }).limit(pageSize);
     // "Open orders" means everything still waiting for action — from ANY day (the red badge counts them the same way)
     if (status !== 'open') {
       if (dates[0]) query = query.gte('order_date', dates[0]);
@@ -110,19 +113,25 @@ export function Orders({ billsMode = false }: { billsMode?: boolean }) {
       setErr('');
       setRows((data as unknown as OrderRow[]).map((o) => ({ ...o, total: Number(o.total), subtotal: Number(o.subtotal), discount: Number(o.discount), delivery_charge: Number(o.delivery_charge), tax: Number(o.tax) })));
     }
-  }, [sb, dates, showArchived, status]);
+  }, [sb, dates, showArchived, status, pageSize]);
 
   useEffect(() => { void load(); }, [load, orderTick]);
 
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase().replace(/\s+/g, '');
     return rows.filter((o) => {
-      if (status === 'open' && ['completed', 'cancelled', 'rejected'].includes(o.status)) return false;
-      if (status !== 'all' && status !== 'open' && o.status !== status) return false;
+      if (status === 'open' && FINISHED.includes(o.status)) return false;
+      if (status === 'finished' && !FINISHED.includes(o.status)) return false;
+      if (status !== 'all' && status !== 'open' && status !== 'finished' && o.status !== status) return false;
       if (!needle) return true;
       return `${o.bill_number}${o.id}${o.customer_name}${o.customer_phone ?? ''}`.toLowerCase().replace(/\s+/g, '').includes(needle);
     });
   }, [rows, status, q]);
+
+  const sel = useSelection(shown.map((o) => o.id));
+  const deletable = shown.filter((o) => FINISHED.includes(o.status)).map((o) => o.id);
+  const [delOpen, setDelOpen] = useState(false);
+  const selectedRows = rows.filter((o) => sel.has(o.id));
 
   const markSeen = (id: string) => {
     const s = new Set(seen).add(id);
@@ -130,10 +139,10 @@ export function Orders({ billsMode = false }: { billsMode?: boolean }) {
     try { localStorage.setItem(SEEN_KEY, JSON.stringify([...s].slice(-500))); } catch { /* ignore */ }
   };
 
-  const exportCsv = () =>
-    downloadCsv(`dawat-${billsMode ? 'bills' : 'orders'}-${istToday()}.csv`,
+  const exportCsv = (list: OrderRow[] = shown, name = `dawat-${billsMode ? 'bills' : 'orders'}-${istToday()}.csv`) =>
+    downloadCsv(name,
       ['Bill number', 'Order ID', 'Created', 'Customer', 'Phone', 'Mode', 'Scheduled for', 'Items', 'Subtotal', 'Discount', 'Delivery', 'Tax', 'Total', 'Status', 'Payment', 'Payment method', 'Coupon'],
-      shown.map((o) => [o.bill_number, o.id, o.created_at, o.customer_name, o.customer_phone, o.mode, o.scheduled_for ?? 'ASAP',
+      list.map((o) => [o.bill_number, o.id, o.created_at, o.customer_name, o.customer_phone, o.mode, o.scheduled_for ?? 'ASAP',
         o.order_items.map((i) => `${i.qty}x ${i.dish_name}${i.variant_label ? ` (${i.variant_label})` : ''}`).join('; '),
         o.subtotal, o.discount, o.delivery_charge, o.tax, o.total, STATUS_LABEL[o.status], PAYMENT_LABEL[o.payment_status], o.payment_method, o.coupon_code]));
 
@@ -152,7 +161,7 @@ export function Orders({ billsMode = false }: { billsMode?: boolean }) {
         intro={billsMode ? 'Every order has a unique bill number. Search by bill number, print or download the receipt.' : 'New orders appear here automatically. Accept, prepare and complete them; payment is recorded separately.'}
         actions={<>
           <Btn onClick={() => void load()}><RefreshCw size={16} /> Refresh</Btn>
-          <Btn tone="gold" onClick={exportCsv} disabled={!shown.length}><Download size={16} /> Export CSV</Btn>
+          <Btn tone="gold" onClick={() => exportCsv()} disabled={!shown.length}><Download size={16} /> Export CSV</Btn>
         </>}
       />
       <Card className="mb-4">
@@ -168,6 +177,7 @@ export function Orders({ billsMode = false }: { billsMode?: boolean }) {
           <Select value={status} onChange={(e) => setStatus(e.target.value as typeof status)} aria-label="Status" className="md:w-48">
             <option value="open">Open orders</option>
             <option value="all">All statuses</option>
+            <option value="finished">Finished (completed, cancelled, rejected)</option>
             {(Object.keys(STATUS_LABEL) as OrderStatus[]).map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
           </Select>
         </div>
@@ -187,18 +197,27 @@ export function Orders({ billsMode = false }: { billsMode?: boolean }) {
       {loading ? <Skeleton rows={4} /> : !shown.length ? (
         <Empty title="No orders here">Orders placed on the website show up automatically. Try a wider date range.</Empty>
       ) : (
+        <>
+        <SelectionBar sel={sel} selectableIds={deletable} noun="order">
+          <Btn onClick={() => exportCsv(selectedRows, `dawat-selected-orders-${istToday()}.csv`)}><Download size={16} /> CSV of selected</Btn>
+          <Btn tone="danger" onClick={() => setDelOpen(true)}><Trash2 size={16} /> Delete permanently…</Btn>
+        </SelectionBar>
         <ul className="space-y-3">
           {shown.map((o) => {
             const isNew = o.status === 'pending' && !seen.has(o.id);
+            const finished = FINISHED.includes(o.status);
             return (
               <li key={o.id} className={`rounded-xl border bg-white/[0.03] p-4 ${isNew ? 'border-gold/70 shadow-[0_0_0_1px_rgba(212,175,55,0.4)]' : 'border-white/10'} ${o.archived_at ? 'opacity-60' : ''}`}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-start gap-1">
+                  <SelectBox checked={sel.has(o.id)} onChange={(v) => sel.toggle(o.id, v)} label={`Select order ${o.bill_number}`} disabled={!finished} title={finished ? undefined : 'Active orders cannot be deleted'} />
                   <button type="button" className="min-w-0 text-left" onClick={() => { setOpenId(o.id); markSeen(o.id); }}>
                     <p className="font-num text-base text-gold">{o.bill_number} {isNew && <Badge tone="gold">NEW</Badge>}</p>
                     <p className="text-sm text-ivory">{o.customer_name} · {o.customer_phone ?? 'no phone'}</p>
                     <p className="text-xs text-ivory/50">{fmtDT(o.created_at)} · {o.mode === 'pickup' ? 'Pickup' : 'Delivery'} · {o.scheduled_for ? `for ${fmtDT(o.scheduled_for)}` : 'ASAP'}</p>
                     <p className="mt-1 text-xs text-ivory/70">{o.order_items.map((i) => `${i.qty}× ${i.dish_name}${i.variant_label ? ` (${i.variant_label})` : ''}`).join(', ')}</p>
                   </button>
+                  </div>
                   <div className="flex flex-col items-end gap-1">
                     <p className="font-num text-lg font-semibold">{inr(o.total)}</p>
                     <div className="flex flex-wrap justify-end gap-1">
@@ -220,13 +239,27 @@ export function Orders({ billsMode = false }: { billsMode?: boolean }) {
             );
           })}
         </ul>
+        {rows.length >= pageSize && <div className="mt-4 text-center"><Btn onClick={() => setPageSize((n) => n + 100)}>Load 100 more orders</Btn></div>}
+        </>
       )}
-      {open && <OrderDetail order={open} onClose={() => setOpenId(null)} onChanged={() => void load()} />}
+      {open && <OrderDetail order={open} onClose={() => setOpenId(null)} onChanged={() => void load()} onDeleted={() => { setOpenId(null); void load(); }} />}
+      <BulkDeleteDialog open={delOpen} onClose={() => setDelOpen(false)} title="Delete orders permanently?" ids={sel.ids}
+        sample={selectedRows.map((o) => `${o.bill_number} · ${o.customer_name} · ${inr(o.total)} · ${STATUS_LABEL[o.status]}`)}
+        explain={<>Items, customer details and history are removed for good. For your accounts, a small <b>bill register</b> keeps each bill number, date, amounts and payment status (see Bills & Receipts). Bill numbers are never reused. Only completed, cancelled or rejected orders can be deleted.</>}
+        onCsv={() => exportCsv(selectedRows, `dawat-orders-before-delete-${istToday()}.csv`)}
+        run={async (chunk) => {
+          const { data, error } = await sb.rpc('admin_delete_orders', { p_ids: chunk });
+          if (error) throw new Error(errText(error));
+          const d = data as { deleted: number; skipped: { bill_number: string; reason: string }[] };
+          return { deleted: d.deleted, skipped: d.skipped.map((x) => ({ label: x.bill_number, reason: x.reason })) };
+        }}
+        onDone={() => { sel.clear(); void load(); }} />
+      {billsMode && <BillRegister />}
     </section>
   );
 }
 
-export function OrderDetail({ order: o, onClose, onChanged }: { order: OrderRow; onClose: () => void; onChanged: () => void }) {
+export function OrderDetail({ order: o, onClose, onChanged, onDeleted }: { order: OrderRow; onClose: () => void; onChanged: () => void; onDeleted?: () => void }) {
   const { sb, toast } = useAdmin();
   const [reasonFor, setReasonFor] = useState<OrderStatus | null>(null);
   const [reason, setReason] = useState('');
@@ -236,6 +269,8 @@ export function OrderDetail({ order: o, onClose, onChanged }: { order: OrderRow;
   const [method, setMethod] = useState(o.payment_method ?? '');
   const [busy, setBusy] = useState('');
   const [confirmArchive, setConfirmArchive] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const update = async (patch: Record<string, unknown>, label: string) => {
     setBusy(label);
@@ -345,6 +380,8 @@ export function OrderDetail({ order: o, onClose, onChanged }: { order: OrderRow;
           {o.archived_at
             ? <Btn onClick={() => void update({ archived_at: null }, 'Restored')}><Undo2 size={16} /> Restore</Btn>
             : <Btn onClick={() => setConfirmArchive(true)} disabled={!['completed', 'cancelled', 'rejected'].includes(o.status)} title="Only finished orders can be archived"><Archive size={16} /> Archive</Btn>}
+          <Btn onClick={() => setEditing(true)}><Pencil size={16} /> Edit details</Btn>
+          {onDeleted && <Btn tone="danger" onClick={() => setConfirmDelete(true)} disabled={!FINISHED.includes(o.status)} title={FINISHED.includes(o.status) ? undefined : 'Active orders cannot be deleted'}><Trash2 size={16} /> Delete permanently</Btn>}
         </div>
       </div>
 
@@ -363,6 +400,87 @@ export function OrderDetail({ order: o, onClose, onChanged }: { order: OrderRow;
       <Confirm open={confirmArchive} title="Archive this order?" onClose={() => setConfirmArchive(false)}
         body={<p>The order is hidden from the default lists. Its bill, items and amounts are kept and it can be restored any time.</p>}
         confirmLabel="Archive" onConfirm={async () => { if (await update({ archived_at: new Date().toISOString() }, 'Archived')) setConfirmArchive(false); }} />
+      {editing && <EditOrderDetails o={o} onClose={() => setEditing(false)} save={async (p) => { if (await update(p, 'Details saved')) setEditing(false); }} />}
+      <Confirm open={confirmDelete} onClose={() => setConfirmDelete(false)} danger typeToConfirm="DELETE" title={`Delete ${o.bill_number} permanently?`}
+        body={<p>The order, its items, customer details and history are removed from the database for good. The bill number, date and amounts stay in the bill register for your accounts. This cannot be undone.</p>}
+        confirmLabel="Delete permanently" onConfirm={async () => {
+          const { data, error } = await sb.rpc('admin_delete_orders', { p_ids: [o.id] });
+          if (error) { toast(errText(error), 'err'); return; }
+          const d = data as { deleted: number; skipped: { reason: string }[] };
+          if (!d.deleted) { toast(d.skipped[0]?.reason ?? 'Not deleted.', 'err'); return; }
+          toast(`${o.bill_number} deleted permanently.`);
+          setConfirmDelete(false);
+          onDeleted?.();
+        }} />
     </Modal>
+  );
+}
+
+/** Customer-facing details may be corrected; amounts, bill number and dates are locked by the database. */
+function EditOrderDetails({ o, onClose, save }: { o: OrderRow; onClose: () => void; save: (p: Record<string, unknown>) => Promise<void> }) {
+  const [f, setF] = useState({ name: o.customer_name, phone: o.customer_phone ?? '', address: o.delivery_address ?? '', instructions: o.instructions ?? '' });
+  const [busy, setBusy] = useState(false);
+  const phoneOk = !f.phone.trim() || /^(\+91[\s-]?)?[6-9]\d{4}[\s-]?\d{5}$/.test(f.phone.trim());
+  const ok = f.name.trim().length >= 2 && phoneOk && (o.mode !== 'delivery' || f.address.trim().length >= 3);
+  return (
+    <Modal open onClose={onClose} title={`Edit details — ${o.bill_number}`}>
+      <div className="space-y-3">
+        <Field label="Customer name"><Input value={f.name} maxLength={100} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
+        <Field label="Phone" hint="10-digit Indian mobile"><Input inputMode="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value.replace(/[^\d+\s-]/g, '').slice(0, 16) })} /></Field>
+        {o.mode === 'delivery' && <Field label="Delivery address"><Textarea rows={2} maxLength={300} value={f.address} onChange={(e) => setF({ ...f, address: e.target.value })} /></Field>}
+        <Field label="Customer instructions"><Textarea rows={2} maxLength={500} value={f.instructions} onChange={(e) => setF({ ...f, instructions: e.target.value })} /></Field>
+        {!phoneOk && <p className="text-xs text-red-300">Enter a valid 10-digit mobile number or leave it empty.</p>}
+        <p className="text-xs text-ivory/50">Bill number, items, amounts and dates cannot be changed.</p>
+        <div className="flex justify-end gap-2">
+          <Btn onClick={onClose}>Cancel</Btn>
+          <Btn tone="gold" busy={busy} disabled={!ok} onClick={async () => {
+            setBusy(true);
+            const digits = f.phone.replace(/\D/g, '').slice(-10);
+            await save({ customer_name: f.name.trim(), customer_phone: digits || null, delivery_address: o.mode === 'delivery' ? f.address.trim() : null, instructions: f.instructions.trim() || null });
+            setBusy(false);
+          }}>Save details</Btn>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+interface BillRow { bill_number: string; order_date: string; status: string; total: number; subtotal: number; discount: number; tax: number; delivery_charge: number; payment_status: string; payment_method: string | null; coupon_code: string | null; items_count: number; deleted_at: string; delete_reason: string }
+/** Deleted orders leave a bill-register row (no personal data) so every bill number stays accounted for. */
+function BillRegister() {
+  const { sb } = useAdmin();
+  const [rows, setRows] = useState<BillRow[] | null>(null);
+  const [open, setOpen] = useState(false);
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    if (!open || rows) return;
+    void sb.from('bill_register').select('*').order('order_date', { ascending: false }).limit(1000).then(({ data, error }) => {
+      if (error) setErr(errText(error, 'Could not load the bill register.')); else setRows(data as BillRow[]);
+    });
+  }, [open, rows, sb]);
+  return (
+    <Card className="mt-6">
+      <button type="button" className="flex w-full items-center justify-between text-left" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <span><span className="block font-semibold text-ivory">Deleted bills register</span><span className="block text-xs text-ivory/55">Bill number, date and amounts of orders you deleted permanently (no names or phones).</span></span>
+        <span className="text-xs text-gold">{open ? 'Hide' : 'Show'}</span>
+      </button>
+      {open && (
+        <div className="mt-3">
+          {err && <Notice kind="err">{err}</Notice>}
+          {!rows ? <Skeleton rows={2} /> : !rows.length ? <p className="text-sm text-ivory/55">No deleted bills yet.</p> : (
+            <>
+              <Btn tone="gold" onClick={() => downloadCsv(`dawat-bill-register-${istToday()}.csv`, ['Bill number', 'Order date', 'Status', 'Subtotal', 'Discount', 'Delivery', 'Tax', 'Total', 'Payment', 'Method', 'Coupon', 'Items', 'Deleted at', 'How'],
+                rows.map((r) => [r.bill_number, r.order_date, r.status, r.subtotal, r.discount, r.delivery_charge, r.tax, r.total, r.payment_status, r.payment_method, r.coupon_code, r.items_count, r.deleted_at, r.delete_reason]))}><Download size={16} /> Export register CSV</Btn>
+              <div className="mt-3 max-h-80 overflow-auto rounded-lg border border-white/10">
+                <table className="w-full text-xs">
+                  <thead className="bg-white/[0.04] text-left text-ivory/50"><tr><th className="px-2 py-1.5">Bill</th><th className="px-2">Date</th><th className="px-2">Status</th><th className="px-2 text-right">Total</th><th className="px-2">Payment</th></tr></thead>
+                  <tbody>{rows.map((r) => <tr key={r.bill_number} className="border-t border-white/5"><td className="px-2 py-1.5 font-num">{r.bill_number}</td><td className="px-2">{r.order_date}</td><td className="px-2">{r.status}</td><td className="px-2 text-right font-num">{inr(r.total)}</td><td className="px-2">{r.payment_status}</td></tr>)}</tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </Card>
   );
 }

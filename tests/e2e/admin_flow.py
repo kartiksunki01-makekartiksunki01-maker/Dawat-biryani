@@ -78,7 +78,7 @@ with sync_playwright() as pw:
     check('Dashboard shows real counts (2 orders today, 2 pending)', re.search(r'2\s*Orders in range', dash) is not None and re.search(r'2\s*Pending right now', dash) is not None, dash[:160].replace('\n', ' '))
     nav = page.get_by_role('navigation', name='Admin sections').first
     labels = nav.locator('ul a').all_inner_texts()
-    check('Sidebar has all 15 sections (+ View site / Sign out)', len(labels) == 15 and nav.get_by_role('link', name='View site').count() == 1, str(len(labels)))
+    check('Sidebar has all 17 sections (+ View site / Sign out)', len(labels) == 17 and nav.get_by_role('link', name='View site').count() == 1, str(len(labels)))
 
     # every section opens without errors
     inventory = []
@@ -88,7 +88,7 @@ with sync_playwright() as pw:
         h = page.locator('main h1').first.inner_text() if page.locator('main h1').count() else ''
         inventory.append((lab, h))
     bad = [x for x in inventory if not x[1]]
-    check('All 15 admin sections open and render a heading', not bad, str(bad))
+    check('All 17 admin sections open and render a heading', not bad, str(bad))
     json.dump(inventory, open(OUT + 'admin_sections.json', 'w'))
 
     # ── Orders ──
@@ -177,8 +177,10 @@ with sync_playwright() as pw:
     check('Coupon edit (25%, max Rs 50) saved', float(e2['discount_value']) == 25 and float(e2['max_discount']) == 50, str(e2))
     page.locator('li', has_text='Twenty off').get_by_role('button', name=re.compile('Actions for')).click()
     page.get_by_role('menuitem', name=re.compile('^Delete')).click()
-    page.get_by_role('dialog').get_by_role('button', name='Archive instead').click(); page.wait_for_timeout(900)
-    check('A used coupon cannot be deleted — it is archived (history kept)', sql("select archived_at is not null a from public.offers where code='TEST20'")[0]['a'] is True)
+    page.get_by_role('dialog').get_by_role('button', name=re.compile('Switch off & delete|Delete permanently')).click(); page.wait_for_timeout(1200)
+    gone = sql("select count(*)::int n from public.offers where code='TEST20'")[0]['n']
+    kept = sql(f"select coupon_code, discount from public.orders where id='{oc['id']}'")[0]
+    check('A used coupon can be deleted (V3.7) — its bill keeps the code and discount', gone == 0 and kept['coupon_code'] == 'TEST20' and float(kept['discount']) > 0, str(kept))
 
     # ── Menu ──
     nav.get_by_role('link', name=re.compile('^Menu')).click(); page.wait_for_timeout(1000)
@@ -223,7 +225,7 @@ with sync_playwright() as pw:
     nav.get_by_role('link', name=re.compile('^Notifications')).click(); page.wait_for_timeout(1000)
     check('Notifications list real events (4 orders + 1 bulk)', page.locator('main li').count() == 5, str(page.locator('main li').count()))
     page.get_by_role('button', name='Mark all as read').click(); page.wait_for_timeout(1000)
-    check('Mark all as read clears the unread badge', page.locator('main').get_by_text('Unread', exact=True).count() == 0)
+    check('Mark all as read clears the unread badge', page.locator('main li').get_by_text('Unread', exact=True).count() == 0 and sql("select count(*)::int n from public.notification_reads")[0]['n'] >= 5)
 
     # ── Settings ──
     nav.get_by_role('link', name=re.compile('^Restaurant')).click(); page.wait_for_timeout(1000)

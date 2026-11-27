@@ -59,9 +59,18 @@ export function ChatWidget() {
     let alive = true;
     const load = () => chatStatus().then((s) => { if (alive) { setStatus(s); setOnline(s.online); } }).catch(() => { if (alive) setStatus((x) => x); });
     void load();
-    const t = window.setInterval(load, 60000);
+    // every visitor runs this, so keep it light: only while the tab is visible, every 3 minutes
+    // (the chat window refreshes availability itself when it is opened)
+    const t = window.setInterval(() => { if (document.visibilityState === 'visible') void load(); }, 180000);
     return () => { alive = false; window.clearInterval(t); };
   }, []);
+  // opening the chat window: fresh "Online / Offline" straight away
+  useEffect(() => {
+    if (!open || !backendConfigured) return;
+    let alive = true;
+    void chatStatus().then((s) => { if (alive) { setStatus(s); setOnline(s.online); } }).catch(() => {});
+    return () => { alive = false; };
+  }, [open]);
 
   useEffect(() => {
     const v = () => setVisible(document.visibilityState === 'visible');
@@ -196,7 +205,7 @@ export function ChatWidget() {
             onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false); }}
           >
             <header className="flex items-center gap-3 bg-gradient-to-r from-[#4a1220] to-[#2a0b14] px-3 py-2.5">
-              <img src={asset('assets/images/logo.png')} alt="" className="h-9 w-9 rounded-full ring-1 ring-gold/60" width={36} height={36} />
+              <img src={asset('assets/images/logo-96.webp')} alt="" className="h-9 w-9 rounded-full ring-1 ring-gold/60" width={36} height={36} />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-semibold">{restaurant.name}</p>
                 <p className="flex items-center gap-1.5 text-[11px] text-ivory/75" data-testid="chat-presence">

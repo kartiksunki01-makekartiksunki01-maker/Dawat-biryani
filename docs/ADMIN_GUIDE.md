@@ -83,3 +83,23 @@ Is section mein do tab hain:
 - **Chat settings**: welcome message, offline message, chat widget on/off, chats kitne din rakhne hain.
 - Coupon: **Coupons & Discounts** → Create coupon → code (jaise DAWAT10), % ya ₹, minimum order, maximum discount, last date, total limit / ek phone kitni baar → Active ON → Save. "View usage" se dekho kis bill par use hua.
 - Jo coupon ek baar bhi use ho chuka hai wo **delete nahi hota, archive hota hai** — taaki purane bills sahi rahein.
+
+## Delete karna, Select all (V3.7)
+- Har list (Orders, Customers, Enquiries, Bulk, Menu, Coupons, Live Chat, Notifications, Media) me har row ke aage **checkbox** hai. Upar **Select all** aur **Delete selected** aata hai.
+- Delete se pehle ek box khulta hai: kya hoga woh likha hota hai, **Download CSV first** button hota hai (pehle backup le lo), aur 5 se zyada items pe **DELETE** type karna padta hai. Delete **hamesha ke liye** hota hai — wapas nahi aata.
+- **Chalu orders (pending, confirmed, preparing, ready, out for delivery) delete nahi ho sakte.** Sirf completed / cancelled / rejected.
+- Order delete karne par bill number, date, amount aur payment **Bills & Receipts → Deleted bills register** me reh jaata hai (hisaab ke liye). Customer ka naam/phone hat jaata hai. Bill number kabhi dobara use nahi hota.
+- Customer delete karne par uska record hat jaata hai, par uske orders "Deleted customer" naam se bache rehte hain (hisaab ke liye). Jis customer ka order abhi chal raha hai, woh skip hota hai.
+- Order ke andar **Edit details**: naam, phone, address, instructions badal sakte ho. Amount aur items lock rehte hain.
+- Coupon jo abhi Live hai aur use ho chuka hai: delete karne par pehle band hota hai, phir delete. Purane bills me coupon code aur discount bacha rehta hai.
+
+## Media & Storage (naya)
+- Saari upload ki hui photos/audio, size aur **kahan use ho rahi hai** dikhata hai.
+- Jo file kahin use ho rahi hai, use tick nahi kar sakte. **Unused** filter se bekaar files dekh ke delete karo.
+- 400 KB se badi photo pe **Make smaller** dabao: chhoti copy ban jaati hai aur dish/coupon apne aap nayi photo pe chala jaata hai.
+
+## Data Cleanup (naya)
+- Har cheez ke liye "Remove after" (Never / 30 / 60 / 90 / 180 / 365 din) chuno, **Save settings** dabao.
+- Har line ke aage "N now" batata hai abhi kitne records hatenge. **Download CSV** se pehle list le lo, phir **Clean up now…**.
+- **Automatic clean-up** switch shuru me **OFF** hai. ON karoge to din me ek baar, jab aap admin panel khologe, purane records apne aap hat jaayenge. Chalu orders, naye enquiries aur open chats kabhi nahi hat-te.
+

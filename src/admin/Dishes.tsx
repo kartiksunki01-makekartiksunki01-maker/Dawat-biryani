@@ -1,7 +1,8 @@
-import { ArrowDown, ArrowUp, Camera, ImagePlus, Loader2, Plus, RefreshCw, Search } from 'lucide-react';
+import { ArrowDown, ArrowUp, Camera, Download, ImagePlus, Loader2, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
 import { asset } from '../utils/format';
-import { Badge, Btn, Confirm, Empty, errText, Field, Input, inr, Modal, Notice, PageHeader, Select, Skeleton, Textarea, Toggle, useAdmin } from './ui';
+import { Badge, Btn, Confirm, downloadCsv, Empty, errText, Field, Input, inr, istToday, Modal, Notice, PageHeader, Select, Skeleton, Textarea, Toggle, useAdmin } from './ui';
+import { BulkDeleteDialog, removeUnusedUploads, SelectBox, SelectionBar, useSelection } from './selection';
 import { ActionMenu } from './sections/Menu3';
 import { uploadImage } from './sections/upload';
 
@@ -76,6 +77,11 @@ export function Dishes() {
     const n = q.trim().toLowerCase();
     return (dishes ?? []).filter((d) => (showArchived || !d.archived_at) && (!n || d.name.toLowerCase().includes(n)));
   }, [dishes, q, showArchived]);
+  const sel = useSelection(shown.map((d) => d.id));
+  const [delMany, setDelMany] = useState(false);
+  const picked = shown.filter((d) => sel.has(d.id));
+  const dishCsv = (list: Dish[], name: string) => downloadCsv(name, ['ID', 'Name', 'Category', 'Diet', 'Portions', 'Visible', 'Sold out', 'Archived', 'Photo'],
+    list.map((d) => [d.id, d.name, d.category_id, d.diet, d.variants.map((v) => `${v.label} ${v.price}`).join('; '), d.is_visible, d.is_sold_out, d.archived_at, d.image_path]));
 
   const patch = async (d: Dish, p: Partial<Dish>, msg: string) => {
     const { error } = await sb.from('dishes').update(p).eq('id', d.id);
@@ -110,9 +116,15 @@ export function Dishes() {
       </div>
       {err && <Notice kind="err">{err}</Notice>}
       {!dishes ? <Skeleton rows={5} /> : !shown.length ? <Empty title="No dishes">Add your first dish.</Empty> : (
+        <>
+        <SelectionBar sel={sel} selectableIds={shown.map((d) => d.id)} noun="dish">
+          <Btn onClick={() => dishCsv(picked, `dawat-selected-dishes-${istToday()}.csv`)}><Download size={16} /> CSV of selected</Btn>
+          <Btn tone="danger" onClick={() => setDelMany(true)}><Trash2 size={16} /> Delete permanently…</Btn>
+        </SelectionBar>
         <ul className="space-y-2">
           {shown.map((d, i) => (
             <li key={d.id} className={`flex flex-wrap items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 ${d.archived_at ? 'opacity-55' : ''}`}>
+              <SelectBox checked={sel.has(d.id)} onChange={(v) => sel.toggle(d.id, v)} label={`Select ${d.name}`} />
               <div className="flex flex-col">
                 <button type="button" aria-label={`Move ${d.name} up`} className="grid h-8 w-8 place-items-center rounded hover:bg-white/10 disabled:opacity-30" disabled={i === 0 || !!q} onClick={() => void move(i, -1)}><ArrowUp size={14} /></button>
                 <button type="button" aria-label={`Move ${d.name} down`} className="grid h-8 w-8 place-items-center rounded hover:bg-white/10 disabled:opacity-30" disabled={i === shown.length - 1 || !!q} onClick={() => void move(i, 1)}><ArrowDown size={14} /></button>
@@ -141,7 +153,20 @@ export function Dishes() {
             </li>
           ))}
         </ul>
+        </>
       )}
+      <BulkDeleteDialog open={delMany} onClose={() => setDelMany(false)} title="Delete dishes permanently?" ids={sel.ids}
+        sample={picked.map((d) => d.name)}
+        explain={<>The dishes and their portions are removed from the menu. Past orders and receipts keep their own copy of names and prices. Uploaded photos that nothing else uses are removed from storage too. To hide a dish you may sell again, <b>archive</b> it instead.</>}
+        onCsv={() => dishCsv(picked, `dawat-dishes-before-delete-${istToday()}.csv`)}
+        run={async (chunk) => {
+          const photos = (dishes ?? []).filter((d) => chunk.includes(d.id)).map((d) => d.image_path);
+          const { data, error } = await sb.from('dishes').delete().in('id', chunk).select('id');
+          if (error) throw new Error(errText(error));
+          await removeUnusedUploads(sb, photos);
+          return { deleted: (data as unknown[]).length, skipped: [] };
+        }}
+        onDone={() => { sel.clear(); void load(); }} />
       {edit && <DishForm dish={edit} cats={cats} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); void load(); }} />}
       {adding && (
         <AddDish
@@ -155,12 +180,14 @@ export function Dishes() {
         />
       )}
       <Confirm open={!!del} onClose={() => setDel(null)} danger typeToConfirm="DELETE" title={`Delete ${del?.name}?`}
-        body={<p>The dish and its portions are removed from the menu. Past orders and receipts keep their own copy of the name and price, so they are not affected. If you might sell it again, <b>archive</b> it instead.</p>}
+        body={<p>The dish and its portions are removed from the menu. Past orders and receipts keep their own copy of the name and price, so they are not affected. If you might sell it again, <b>archive</b> it instead. An uploaded photo that nothing else uses is removed too.</p>}
         confirmLabel="Delete permanently"
         onConfirm={async () => {
           if (!del) return;
           const { error } = await sb.from('dishes').delete().eq('id', del.id);
-          if (error) toast(errText(error), 'err'); else { toast(`${del.name} deleted.`); setDel(null); void load(); }
+          if (error) { toast(errText(error), 'err'); return; }
+          await removeUnusedUploads(sb, [del.image_path]);
+          toast(`${del.name} deleted.`); setDel(null); void load();
         }} />
     </section>
   );

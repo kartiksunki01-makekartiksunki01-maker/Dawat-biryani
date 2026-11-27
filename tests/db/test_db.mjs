@@ -400,12 +400,18 @@ check('Existing orders/customers/offers untouched by the chat migration', (await
   await lc.end();
 
   const usedOffer = (await su(`select id from public.offers where code='DAWAT10'`)).rows[0].id;
+  await su(`update public.offers set is_active = true, archived_at = null, ends_at = now() + interval '7 days' where id=$1`, [usedOffer]);
   const delUsed = await admin(`delete from public.offers where id=$1`, [usedOffer]);
-  check('A used coupon cannot be deleted (archive keeps old bills explained)', /offer_used/.test(errInfo(delUsed)) && (await su(`select count(*)::int n from public.offers where id=$1`, [usedOffer])).rows[0].n === 1, errInfo(delUsed));
+  check('A live, used coupon cannot be deleted (switch it off first)', /offer_used/.test(errInfo(delUsed)) && (await su(`select count(*)::int n from public.offers where id=$1`, [usedOffer])).rows[0].n === 1, errInfo(delUsed));
   const fresh = await admin(`insert into public.offers (title, discount_type, discount_value, code, is_active, max_discount, usage_limit, ends_at) values ('Flat 50', 'fixed', 50, 'FLAT50', true, null, 10, now() + interval '7 days') returning id`);
   const delFresh = await admin(`delete from public.offers where id=$1`, [fresh.rows?.[0]?.id]);
   check('An unused coupon can be deleted by the admin', !delFresh.error && delFresh.rowCount === 1, errInfo(delFresh));
   check('Visitors still cannot delete coupons', (await anon(`delete from public.offers`)).error || (await su(`select count(*)::int n from public.offers where id=$1`, [usedOffer])).rows[0].n === 1);
+  const billsBefore = (await su(`select count(*)::int n from public.orders where offer_id=$1`, [usedOffer])).rows[0].n;
+  await admin(`update public.offers set is_active = false where id=$1`, [usedOffer]);
+  const delOff = await admin(`delete from public.offers where id=$1`, [usedOffer]);
+  const kept = (await su(`select count(*)::int n from public.orders where coupon_code='DAWAT10' and offer_id is null and discount > 0`)).rows[0].n;
+  check('A used coupon that is switched off can be deleted; its orders keep the code and discount', !delOff.error && billsBefore > 0 && kept === billsBefore, errInfo(delOff) + ` ${billsBefore}/${kept}`);
   const wa = (await su(`select whatsapp_number, whatsapp_confirmed from public.restaurant_settings where id=1`)).rows[0];
   check('WhatsApp number migrated to the owner-confirmed +91 97668 88897', wa.whatsapp_number === '919766888897' && wa.whatsapp_confirmed === true, JSON.stringify(wa));
 }

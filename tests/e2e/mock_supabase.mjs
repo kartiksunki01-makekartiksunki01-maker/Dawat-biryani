@@ -19,7 +19,10 @@ const SIG = {
   admin_convert_lead: [['p_lead_id', 'uuid']], admin_mark_all_read: [], admin_get_order: [['p_order_id', 'uuid']],
   chat_status: [], chat_send: [['p', 'jsonb']], chat_fetch: [['p', 'jsonb']], admin_chat_reply: [['p', 'jsonb']], admin_chat_action: [['p', 'jsonb']],
   admin_chat_heartbeat: [], admin_chat_purge: [], submit_bulk_enquiry: [['p', 'jsonb']],
+  admin_delete_orders: [['p_ids', 'uuid[]']], admin_delete_customers: [['p_ids', 'uuid[]']], admin_delete_conversations: [['p_ids', 'uuid[]']],
+  admin_cleanup_preview: [], admin_cleanup_run: [], admin_cleanup_auto: [], admin_media_list: [],
 };
+const files = new Map(); // storage stand-in: 'bucket/name' -> { body, type }
 let fault = null; // { fn, mode: 'drop' | 'commit-then-drop' | 'commit-then-hang', times }
 const calls = [];
 
@@ -69,8 +72,10 @@ let rt = { connections: 0, broadcasts: 0, changes: 0 };
 const server = http
   .createServer(async (req, res) => {
     if (req.method === 'OPTIONS') return send(res, 204);
-    let raw = '';
-    for await (const chunk of req) raw += chunk;
+    const parts = [];
+    for await (const chunk of req) parts.push(chunk);
+    const buf = Buffer.concat(parts);
+    const raw = buf.toString('utf8');
     const u = new globalThis.URL(req.url ?? '/', 'http://x');
 
     if (u.pathname === '/__control' && req.method === 'POST') {
@@ -105,12 +110,50 @@ const server = http
     }
     if (u.pathname === '/auth/v1/logout') return send(res, 204);
 
-    // ── storage (accepts admin uploads; nothing is stored) ──
+    // ── storage (local stand-in: files kept in memory, rows in storage.objects like Supabase) ──
+    if (u.pathname.startsWith('/storage/v1/object/public/') && (req.method === 'GET' || req.method === 'HEAD')) {
+      const k = decodeURIComponent(u.pathname.replace('/storage/v1/object/public/', ''));
+      const f = files.get(k);
+      if (!f) return send(res, 404, { statusCode: '404', error: 'not_found', message: 'Object not found' });
+      res.writeHead(200, { 'content-type': f.type, 'content-length': f.body.length, 'access-control-allow-origin': '*' });
+      return res.end(req.method === 'HEAD' ? undefined : f.body);
+    }
     if (u.pathname.startsWith('/storage/v1/object/')) {
       const claims = readJwt((req.headers.authorization ?? '').replace(/^Bearer /, ''));
       const isAdmin = claims && (await pool.query('select 1 from public.admins where user_id = $1', [claims.sub])).rowCount;
       if (!isAdmin) return send(res, 403, { statusCode: '403', error: 'Unauthorized', message: 'new row violates row-level security policy' });
-      return send(res, 200, { Key: u.pathname.replace('/storage/v1/object/', ''), Id: 'test' });
+      const rest = decodeURIComponent(u.pathname.replace('/storage/v1/object/', ''));
+      if (req.method === 'DELETE') {            // remove(): DELETE /object/<bucket> {prefixes:[...]}
+        const bucket = rest.replace(/\/$/, '');
+        const names = (JSON.parse(raw || '{}').prefixes ?? []);
+        const r = await pool.query('delete from storage.objects where bucket_id = $1 and name = any($2) returning name', [bucket, names]);
+        for (const n of names) files.delete(`${bucket}/${n}`);
+        return send(res, 200, r.rows.map((x) => ({ name: x.name, bucket_id: bucket })));
+      }
+      const slash = rest.indexOf('/');
+      const bucket = rest.slice(0, slash), name = rest.slice(slash + 1);
+      let type = String(req.headers['content-type'] ?? 'application/octet-stream');
+      let body = buf;
+      // supabase-js sends files as multipart/form-data (like the real Storage API): keep only the file part
+      const bm = /boundary=([^;]+)/.exec(type);
+      if (type.startsWith('multipart/form-data') && bm) {
+        const sep = Buffer.from(`--${bm[1].replace(/"/g, '')}`);
+        let at = buf.indexOf(sep);
+        while (at >= 0) {
+          const next = buf.indexOf(sep, at + sep.length);
+          if (next < 0) break;
+          const part = buf.subarray(at + sep.length + 2, next - 2);
+          const headEnd = part.indexOf('\r\n\r\n');
+          const head = part.subarray(0, headEnd).toString();
+          const ct = /content-type:\s*([^\r\n]+)/i.exec(head);
+          if (ct && !/name="cacheControl"/.test(head)) { type = ct[1].trim(); body = part.subarray(headEnd + 4); }
+          at = next;
+        }
+      }
+      files.set(`${bucket}/${name}`, { body, type });
+      await pool.query('delete from storage.objects where bucket_id = $1 and name = $2', [bucket, name]);
+      await pool.query('insert into storage.objects (bucket_id, name, metadata) values ($1, $2, $3)', [bucket, name, JSON.stringify({ size: body.length, mimetype: type })]);
+      return send(res, 200, { Key: rest, Id: 'test' });
     }
 
     // ── rpc ──

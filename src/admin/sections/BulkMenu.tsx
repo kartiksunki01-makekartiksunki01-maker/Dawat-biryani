@@ -1,9 +1,10 @@
-import { ArrowDown, ArrowUp, Camera, ImagePlus, Loader2, Plus, RefreshCw, Search } from 'lucide-react';
+import { ArrowDown, ArrowUp, Camera, Download, ImagePlus, Loader2, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { asset } from '../../utils/format';
 import { BULK_CATEGORY_LABEL, type BulkCategory } from '../../data/bulk';
 import { usePhotoUpload, PhotoTile } from '../photo';
-import { Badge, Btn, Card, Confirm, Empty, errText, Field, Input, inr, Modal, Notice, Select, Skeleton, Stat, Textarea, Toggle, useAdmin } from '../ui';
+import { Badge, Btn, Card, Confirm, downloadCsv, Empty, errText, Field, Input, inr, istToday, Modal, Notice, Select, Skeleton, Stat, Textarea, Toggle, useAdmin } from '../ui';
+import { BulkDeleteDialog, removeUnusedUploads, SelectBox, SelectionBar, useSelection } from '../selection';
 import { ActionMenu } from './Menu3';
 
 export interface BulkRow {
@@ -56,6 +57,19 @@ export function BulkMenu() {
       (cat === 'all' || r.category === cat) &&
       (!n || `${r.name} ${r.slug} ${BULK_CATEGORY_LABEL[r.category]}`.toLowerCase().includes(n)));
   }, [rows, q, cat, avail]);
+  const sel = useSelection(shown.map((r) => r.id));
+  const [delMany, setDelMany] = useState(false);
+  const [delOne, setDelOne] = useState<BulkRow | null>(null);
+  const picked = shown.filter((r) => sel.has(r.id));
+  const bulkCsv = (list: BulkRow[], name: string) => downloadCsv(name, ['Slug', 'Name', 'Category', 'Diet', 'Price per kg', 'Min kg', 'Max kg', 'No notice up to kg', 'Notice hours', 'On website', 'Sold out', 'Archived', 'Photo', 'Private note'],
+    list.map((r) => [r.slug, r.name, r.category, r.diet, r.price_per_kg, r.min_kg, r.max_kg, r.notice_free_up_to_kg, r.advance_notice_hours, r.is_available, r.is_sold_out, r.archived_at, r.image_path, r.admin_note]));
+  const deleteRows = async (ids: string[]) => {
+    const photos = (rows ?? []).filter((r) => ids.includes(r.id)).map((r) => r.image_path);
+    const { data, error } = await sb.from('bulk_menu_items').delete().in('id', ids).select('id');
+    if (error) throw new Error(errText(error));
+    await removeUnusedUploads(sb, photos);
+    return (data as unknown[]).length;
+  };
 
   const patch = async (r: BulkRow, p: Partial<BulkRow>, msg: string) => {
     const { error } = await sb.from('bulk_menu_items').update(p).eq('id', r.id);
@@ -149,12 +163,18 @@ export function BulkMenu() {
 
       {err && <Notice kind="err">{err}</Notice>}
       {!rows ? <Skeleton rows={4} /> : !shown.length ? <Empty title={avail === 'archived' ? 'No archived bulk dishes' : 'No bulk dishes match'} /> : (
+        <>
+        <SelectionBar sel={sel} selectableIds={shown.map((r) => r.id)} noun="bulk dish">
+          <Btn onClick={() => bulkCsv(picked, `dawat-selected-bulk-dishes-${istToday()}.csv`)}><Download size={16} /> CSV of selected</Btn>
+          <Btn tone="danger" onClick={() => setDelMany(true)}><Trash2 size={16} /> Delete permanently…</Btn>
+        </SelectionBar>
         <ul className="space-y-2" aria-label="Bulk menu">
           {shown.map((r) => {
             const idx = active.findIndex((x) => x.id === r.id);
             return (
               <li key={r.id} className={`rounded-xl border border-white/10 bg-white/[0.03] p-3 ${r.archived_at ? 'opacity-60' : ''}`} data-bulk-admin-row={r.slug}>
                 <div className="flex flex-wrap items-center gap-3">
+                  <SelectBox checked={sel.has(r.id)} onChange={(v) => sel.toggle(r.id, v)} label={`Select ${r.name}`} />
                   {!r.archived_at && (
                     <div className="flex flex-col">
                       <button type="button" className="grid h-8 w-8 place-items-center rounded hover:bg-white/10 disabled:opacity-30" disabled={idx <= 0} onClick={() => void move(r, -1)} aria-label={`Move ${r.name} up`}><ArrowUp size={14} /></button>
@@ -177,14 +197,30 @@ export function BulkMenu() {
                   )}
                   <Btn onClick={() => setEdit(r)}>Edit</Btn>
                   <ActionMenu label={`Actions for ${r.name}`} items={r.archived_at
-                    ? [{ label: 'Restore (stays hidden)', onClick: () => void patch(r, { archived_at: null, is_available: false }, `${r.name} restored — switch on “On website” when ready.`) }]
-                    : [{ label: 'Archive…', onClick: () => setArchive(r), danger: true }]} />
+                    ? [{ label: 'Restore (stays hidden)', onClick: () => void patch(r, { archived_at: null, is_available: false }, `${r.name} restored — switch on “On website” when ready.`) },
+                       { label: 'Delete permanently…', onClick: () => setDelOne(r), danger: true }]
+                    : [{ label: 'Archive…', onClick: () => setArchive(r) }, { label: 'Delete permanently…', onClick: () => setDelOne(r), danger: true }]} />
                 </div>
               </li>
             );
           })}
         </ul>
+        </>
       )}
+
+      <BulkDeleteDialog open={delMany} onClose={() => setDelMany(false)} title="Delete bulk dishes permanently?" ids={sel.ids}
+        sample={picked.map((r) => `${r.name} · ${inr(r.price_per_kg)}/kg`)}
+        explain={<>They disappear from the website and the bulk menu for good. Enquiries and bills that already include them keep their names and prices. Uploaded photos nothing else uses are removed from storage.</>}
+        onCsv={() => bulkCsv(picked, `dawat-bulk-dishes-before-delete-${istToday()}.csv`)}
+        run={async (chunk) => ({ deleted: await deleteRows(chunk), skipped: [] })}
+        onDone={() => { sel.clear(); void load(); }} />
+      <Confirm open={!!delOne} onClose={() => setDelOne(null)} danger typeToConfirm="DELETE" title={`Delete ${delOne?.name ?? ''} permanently?`}
+        body={<p>It is removed from the bulk menu and the website for good. Earlier enquiries and bills keep their own copy of the name and price. To hide it for now, use <b>Archive</b> instead.</p>}
+        confirmLabel="Delete permanently" onConfirm={async () => {
+          if (!delOne) return;
+          try { await deleteRows([delOne.id]); toast(`${delOne.name} deleted permanently.`); setDelOne(null); void load(); }
+          catch (e) { toast(e instanceof Error ? e.message : 'Could not delete.', 'err'); }
+        }} />
 
       {edit && <BulkEditor key={edit.id} row={edit} onClose={() => setEdit(null)} onSaved={(r) => { setRows((rs) => rs?.map((x) => (x.id === r.id ? r : x)) ?? null); setEdit(null); }} />}
       <AddBulkDish open={adding} onClose={() => setAdding(false)} existing={rows ?? []} onAdded={(r) => { setAdding(false); setRows((rs) => [...(rs ?? []), r]); setEdit(r); }} />
