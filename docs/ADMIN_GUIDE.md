@@ -27,9 +27,27 @@ Bill number (jaise `DBH-20261124-0001`) apne aap banta hai, kabhi repeat nahi ho
 - Galat/expired coupon customer ko reason ke saath mana ho jata hai.
 - Jo offer use ho chuka hai wo delete nahi hota — archive karo.
 
-## Bulk Orders
-- Enquiry aati hai → customer ko call/WhatsApp karo → **Quotation (₹)** likho → **Save quote**.
-- Customer maan gaya → **Convert to order** → bill number banega + ek private link milega. Wo link customer ko bhejo.
+## Bulk & Special Orders
+Is section mein do tab hain:
+
+**1. Bulk Menu & Pricing** (per-kg bulk menu — regular plate prices se bilkul alag)
+- Har dish ka **₹/kg**, category, veg/non-veg, photo, min/max kg aur advance notice yahin se badlo → **Edit** → **Save changes**. Naya price turant nayi enquiries par lagta hai; purani enquiries aur bills apne purane price par rehte hain.
+- **On website** switch = dish website par dikhe ya chhupe. **Sold out** = dikhegi par order nahi hogi.
+- Photo: list mein photo par tap karo (camera patti) → photo chuno → turant save. Jis dish ki photo nahi hai, website par “photo coming soon” dikhta hai — kisi doosri dish ki photo kabhi nahi.
+- **Add bulk dish** → naam, category, ₹/kg → dish chhupi hui banti hai → photo/rules bharo → “Show on website” on karo.
+- Upar ka **Maximum total per online enquiry** (abhi 20 kg) = customer ek enquiry mein kul kitne kg tak online bhej sakta hai.
+- **Apply one rule to every bulk dish** = sab dishes par ek saath min/max kg aur notice ka rule.
+- ↑ ↓ = website par order badlo. **Archive** = hata do (record rehta hai, “Archived” filter se wapas la sakte ho).
+- Gold “Note” = sirf aapke liye private note. Abhi teen dishes par confirm karne wali baat likhi hai:
+  - **Chicken Malai Tikka Biryani**: ₹1,400 per kg WhatsApp screenshot se padha gaya tha. Unit confirm karo, tab “On website” on karo (abhi chhupi hai).
+  - **Prawns Biryani**, **Chicken Sukha Lapeta**: spelling confirm karo.
+
+**2. Bulk Order Enquiries**
+- Har enquiry mein dish-wise kg, us waqt ka ₹/kg, total kg, estimate, event, date/time, pickup/delivery aur instructions dikhte hain.
+- Customer ko **Call / WhatsApp** karo → **Final quotation (₹)** likho (ya **Use estimate**) → **Save quote** → **Confirm quotation**.
+- Customer maan gaya → **Convert to order** → bill number + receipt banega + ek private link milega. Wo link customer ko bhejo. Ek enquiry sirf ek baar order banti hai.
+- Mana karna ho → **Reject…** (rejected enquiry order nahi ban sakti, jab tak status wapas na badlo).
+- Notes: ⋮ → “Show message & notes”. **Export CSV** = har dish ki alag line.
 
 ## Customers
 - Sab orders se apne aap banta hai. ⋮ se: history, notes, archive, ya **Delete personal data** (naam/phone hat jata hai, bills aur amount rehte hain).
@@ -65,3 +83,23 @@ Bill number (jaise `DBH-20261124-0001`) apne aap banta hai, kabhi repeat nahi ho
 - **Chat settings**: welcome message, offline message, chat widget on/off, chats kitne din rakhne hain.
 - Coupon: **Coupons & Discounts** → Create coupon → code (jaise DAWAT10), % ya ₹, minimum order, maximum discount, last date, total limit / ek phone kitni baar → Active ON → Save. "View usage" se dekho kis bill par use hua.
 - Jo coupon ek baar bhi use ho chuka hai wo **delete nahi hota, archive hota hai** — taaki purane bills sahi rahein.
+
+## Delete karna, Select all (V3.7)
+- Har list (Orders, Customers, Enquiries, Bulk, Menu, Coupons, Live Chat, Notifications, Media) me har row ke aage **checkbox** hai. Upar **Select all** aur **Delete selected** aata hai.
+- Delete se pehle ek box khulta hai: kya hoga woh likha hota hai, **Download CSV first** button hota hai (pehle backup le lo), aur 5 se zyada items pe **DELETE** type karna padta hai. Delete **hamesha ke liye** hota hai — wapas nahi aata.
+- **Chalu orders (pending, confirmed, preparing, ready, out for delivery) delete nahi ho sakte.** Sirf completed / cancelled / rejected.
+- Order delete karne par bill number, date, amount aur payment **Bills & Receipts → Deleted bills register** me reh jaata hai (hisaab ke liye). Customer ka naam/phone hat jaata hai. Bill number kabhi dobara use nahi hota.
+- Customer delete karne par uska record hat jaata hai, par uske orders "Deleted customer" naam se bache rehte hain (hisaab ke liye). Jis customer ka order abhi chal raha hai, woh skip hota hai.
+- Order ke andar **Edit details**: naam, phone, address, instructions badal sakte ho. Amount aur items lock rehte hain.
+- Coupon jo abhi Live hai aur use ho chuka hai: delete karne par pehle band hota hai, phir delete. Purane bills me coupon code aur discount bacha rehta hai.
+
+## Media & Storage (naya)
+- Saari upload ki hui photos/audio, size aur **kahan use ho rahi hai** dikhata hai.
+- Jo file kahin use ho rahi hai, use tick nahi kar sakte. **Unused** filter se bekaar files dekh ke delete karo.
+- 400 KB se badi photo pe **Make smaller** dabao: chhoti copy ban jaati hai aur dish/coupon apne aap nayi photo pe chala jaata hai.
+
+## Data Cleanup (naya)
+- Har cheez ke liye "Remove after" (Never / 30 / 60 / 90 / 180 / 365 din) chuno, **Save settings** dabao.
+- Har line ke aage "N now" batata hai abhi kitne records hatenge. **Download CSV** se pehle list le lo, phir **Clean up now…**.
+- **Automatic clean-up** switch shuru me **OFF** hai. ON karoge to din me ek baar, jab aap admin panel khologe, purane records apne aap hat jaayenge. Chalu orders, naye enquiries aur open chats kabhi nahi hat-te.
+

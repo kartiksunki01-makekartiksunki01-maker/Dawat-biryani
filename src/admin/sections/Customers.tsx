@@ -1,7 +1,8 @@
-import { Download, RefreshCw, Search } from 'lucide-react';
+import { Download, RefreshCw, Search, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { STATUS_LABEL } from '../../lib/api';
-import { Badge, Btn, Confirm, downloadCsv, Empty, errText, Field, fmtDT, Input, inr, istToday, Modal, Notice, PageHeader, Skeleton, Textarea, useAdmin, waLink } from '../ui';
+import { Badge, Btn, Confirm, downloadCsv, Empty, errText, Field, fmtDT, Input, inr, istToday, Modal, Notice, PageHeader, Select, Skeleton, Textarea, useAdmin, waLink } from '../ui';
+import { BulkDeleteDialog, SelectBox, SelectionBar, useSelection } from '../selection';
 import { ActionMenu } from './Menu3';
 import { ORDER_COLS, OrderDetail, statusTone, type OrderRow } from './Orders';
 
@@ -20,6 +21,8 @@ export function Customers() {
   const [history, setHistory] = useState<CustomerRow | null>(null);
   const [remove, setRemove] = useState<CustomerRow | null>(null);
   const [busy, setBusy] = useState(false);
+  const [age, setAge] = useState('all');
+  const [delOpen, setDelOpen] = useState(false);
 
   const load = useCallback(async () => {
     const { data, error } = await sb.rpc('admin_customers');
@@ -31,8 +34,14 @@ export function Customers() {
 
   const shown = useMemo(() => {
     const n = q.trim().toLowerCase();
-    return (rows ?? []).filter((c) => (showArchived || !c.archived_at) && (!n || `${c.name} ${c.phone ?? ''}`.toLowerCase().includes(n)));
-  }, [rows, q, showArchived]);
+    const cut = age === 'all' ? null : Date.now() - Number(age) * 864e5;
+    return (rows ?? []).filter((c) => (showArchived || !c.archived_at) && (!n || `${c.name} ${c.phone ?? ''}`.toLowerCase().includes(n))
+      && (cut === null || !c.last_order_at || new Date(c.last_order_at).getTime() < cut));
+  }, [rows, q, showArchived, age]);
+  const sel = useSelection(shown.map((c) => c.id));
+  const picked = shown.filter((c) => sel.has(c.id));
+  const csv = (list: CustomerRow[], name: string) => downloadCsv(name, ['Name', 'Phone', 'Orders', 'Completed', 'Cancelled', 'Order value', 'First order', 'Last order', 'Notes'],
+    list.map((c) => [c.name, c.phone, c.orders, c.completed, c.cancelled, c.value, c.first_order_at, c.last_order_at, c.notes]));
 
   const setArchived = async (c: CustomerRow, archived: boolean) => {
     const { error } = await sb.from('customers').update({ archived_at: archived ? new Date().toISOString() : null }).eq('id', c.id);
@@ -44,8 +53,7 @@ export function Customers() {
       <PageHeader title="Customers" intro="Built automatically from real orders. A phone number groups orders — it does not prove identity, so customers never see each other's data."
         actions={<>
           <Btn onClick={() => void load()}><RefreshCw size={16} /> Refresh</Btn>
-          <Btn tone="gold" disabled={!shown.length} onClick={() => downloadCsv(`dawat-customers-${istToday()}.csv`, ['Name', 'Phone', 'Orders', 'Completed', 'Cancelled', 'Order value', 'First order', 'Last order', 'Notes'],
-            shown.map((c) => [c.name, c.phone, c.orders, c.completed, c.cancelled, c.value, c.first_order_at, c.last_order_at, c.notes]))}><Download size={16} /> Export CSV</Btn>
+          <Btn tone="gold" disabled={!shown.length} onClick={() => csv(shown, `dawat-customers-${istToday()}.csv`)}><Download size={16} /> Export CSV</Btn>
         </>} />
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <label className="relative min-w-[220px] flex-1">
@@ -53,17 +61,31 @@ export function Customers() {
           <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-ivory/40" />
           <Input className="pl-9" placeholder="Name or phone" value={q} onChange={(e) => setQ(e.target.value)} />
         </label>
+        <Select aria-label="Last order" value={age} onChange={(e) => setAge(e.target.value)} className="!w-48">
+          <option value="all">Any last order</option>
+          <option value="30">No order for 30+ days</option>
+          <option value="60">No order for 60+ days</option>
+          <option value="90">No order for 90+ days</option>
+        </Select>
         <label className="flex items-center gap-2 text-xs text-ivory/60"><input type="checkbox" className="h-4 w-4 accent-[#D4AF37]" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> Show archived</label>
       </div>
       {err && <Notice kind="err">{err}</Notice>}
-      {!rows ? <Skeleton rows={4} /> : !shown.length ? <Empty title="No customers yet">Customers appear here after their first order.</Empty> : (
+      {!rows ? <Skeleton rows={4} /> : !shown.length ? <Empty title="No customers here">Customers appear here after their first order.</Empty> : (
+        <>
+        <SelectionBar sel={sel} selectableIds={shown.map((c) => c.id)} noun="customer">
+          <Btn onClick={() => csv(picked, `dawat-selected-customers-${istToday()}.csv`)}><Download size={16} /> CSV of selected</Btn>
+          <Btn tone="danger" onClick={() => setDelOpen(true)}><Trash2 size={16} /> Delete permanently…</Btn>
+        </SelectionBar>
         <ul className="grid gap-3 md:grid-cols-2">
           {shown.map((c) => (
             <li key={c.id} className={`rounded-xl border border-white/10 bg-white/[0.03] p-4 ${c.archived_at ? 'opacity-60' : ''}`}>
               <div className="flex items-start justify-between gap-2">
+                <div className="flex items-start gap-1">
+                <SelectBox checked={sel.has(c.id)} onChange={(v) => sel.toggle(c.id, v)} label={`Select customer ${c.name}`} />
                 <div>
                   <p className="font-semibold">{c.name} {c.anonymised_at && <Badge>Anonymised</Badge>} {c.archived_at && <Badge>Archived</Badge>}</p>
                   <p className="font-num text-sm text-ivory/60">{c.phone ?? '—'}</p>
+                </div>
                 </div>
                 <ActionMenu label={`Actions for ${c.name}`} items={[
                   { label: 'View order history', onClick: () => setHistory(c) },
@@ -86,7 +108,19 @@ export function Customers() {
             </li>
           ))}
         </ul>
+        </>
       )}
+      <BulkDeleteDialog open={delOpen} onClose={() => setDelOpen(false)} title="Delete customers permanently?" ids={sel.ids}
+        sample={picked.map((c) => `${c.name} · ${c.phone ?? 'no phone'} · ${c.orders} order(s)`)}
+        explain={<>The customer records are deleted. Their past orders and bills are <b>kept</b>, shown as “Deleted customer” without name or phone. Customers with an order still in progress are skipped.</>}
+        onCsv={() => csv(picked, `dawat-customers-before-delete-${istToday()}.csv`)}
+        run={async (chunk) => {
+          const { data, error } = await sb.rpc('admin_delete_customers', { p_ids: chunk });
+          if (error) throw new Error(errText(error));
+          const d = data as { deleted: number; skipped: { name: string; reason: string }[] };
+          return { deleted: d.deleted, skipped: d.skipped.map((x) => ({ label: x.name, reason: x.reason })) };
+        }}
+        onDone={() => { sel.clear(); void load(); }} />
       {edit && <EditCustomer c={edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); void load(); }} />}
       {history && <History c={history} onClose={() => setHistory(null)} />}
       <Confirm open={!!remove} onClose={() => setRemove(null)} danger busy={busy} typeToConfirm="DELETE"

@@ -586,3 +586,16 @@ select.field option {
 .menu-spot {
   background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 30%), rgb(245 158 11 / 0.14), transparent 45%);
 }
+
+/* V3.6 bulk orders: one golden sweep across a card when a dish is added */
+.bulk-sweep {
+  background: linear-gradient(105deg, transparent 30%, rgba(244, 215, 126, 0.28) 48%, rgba(255, 236, 179, 0.4) 50%, rgba(244, 215, 126, 0.28) 52%, transparent 70%);
+  transform: translateX(-100%);
+  animation: bulk-sweep 0.75s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes bulk-sweep {
+  to { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bulk-sweep { animation: none; transform: none; background: rgba(244, 215, 126, 0.12); }
+}

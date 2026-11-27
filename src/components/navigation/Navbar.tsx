@@ -18,7 +18,7 @@ export const NAV_LINKS = [
   { id: 'our-story', label: 'Our Story' },
   { id: 'menu', label: 'Signature Menu' },
   { id: 'dum-experience', label: 'The Dum Experience' },
-  { id: 'bulk-orders', label: 'Bulk Orders' },
+  { id: 'bulk-orders', label: 'Bulk & Special Orders' },
   { id: 'gallery', label: 'Gallery' },
   { id: 'reviews', label: 'Reviews' },
   { id: 'visit', label: 'Visit Us' },
@@ -93,7 +93,7 @@ export function Navbar() {
             transition={{ duration: 0.8, ease, delay: 0.1 }}
           >
             <img
-              src={asset('assets/images/logo-256.png')}
+              src={asset('assets/images/logo-256.webp')}
               alt=""
               width={56}
               height={56}
@@ -247,7 +247,7 @@ function MobileDrawer({
           <div className="bg-jali absolute inset-0 opacity-60" aria-hidden />
           <div className="relative flex min-h-full flex-col px-6 pb-10 pt-5">
             <div className="flex items-center justify-between">
-              <img src={asset('assets/images/logo-256.png')} alt={restaurant.name} className="h-14 w-14" />
+              <img src={asset('assets/images/logo-256.webp')} alt={restaurant.name} className="h-14 w-14" />
               <button
                 type="button"
                 onClick={onClose}

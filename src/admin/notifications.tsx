@@ -77,6 +77,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const [pendingOrders, setPendingOrders] = useState(0);
   const [live, setLive] = useState(false);
+  const liveRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [orderTick, setOrderTick] = useState(0);
@@ -100,11 +101,16 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   }, [toast]);
 
   const reload = useCallback(async () => {
-    const [n, r, p] = await Promise.all([
+    const [n, p] = await Promise.all([
       sb.from('notifications').select('*').order('created_at', { ascending: false }).limit(200),
-      sb.from('notification_reads').select('notification_id').eq('admin_id', user.id),
       sb.from('orders').select('id', { count: 'exact', head: true }).eq('status', 'pending').is('archived_at', null),
     ]);
+    // read marks only from the time window on screen (the full history grows forever); a notification
+    // can only be read after it was created, so reads older than the oldest one shown are irrelevant
+    const listed = (n.data as { created_at: string }[] | null) ?? [];
+    const r = listed.length
+      ? await sb.from('notification_reads').select('notification_id').eq('admin_id', user.id).gte('read_at', listed[listed.length - 1].created_at)
+      : { data: [], error: null };
     setLoading(false);
     if (n.error || r.error) {
       setError('Could not load notifications. Retrying automatically.');
@@ -135,13 +141,22 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
         void sb.from('orders').select('id', { count: 'exact', head: true }).eq('status', 'pending').is('archived_at', null)
           .then((p) => !p.error && setPendingOrders(p.count ?? 0));
       })
-      .subscribe((status) => setLive(status === 'SUBSCRIBED'));
-    // polling fallback (also heals missed events after a reconnect)
+      .subscribe((status) => { liveRef.current = status === 'SUBSCRIBED'; setLive(liveRef.current); });
+    // polling fallback: every 30 s only while live push is down; every 2 min as a safety net while it works
+    // (heals missed events after a reconnect without re-reading everything twice a minute)
+    let ticks = 0;
     const t = window.setInterval(() => {
-      if (document.visibilityState === 'visible') void reload().then(() => setOrderTick((x) => x + 1));
+      ticks += 1;
+      if (document.visibilityState !== 'visible') return;
+      if (!liveRef.current) void reload().then(() => setOrderTick((x) => x + 1));
+      else if (ticks % 4 === 0) void reload();
     }, 30000);
+    // coming back to the tab after a while: refresh once
+    const back = () => { if (document.visibilityState === 'visible') void reload(); };
+    document.addEventListener('visibilitychange', back);
     return () => {
       window.clearInterval(t);
+      document.removeEventListener('visibilitychange', back);
       void sb.removeChannel(ch);
     };
   }, [sb, reload, announce]);

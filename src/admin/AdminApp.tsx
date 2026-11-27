@@ -1,7 +1,7 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import {
   BadgePercent, Bell, ChartColumn, ClipboardList, Inbox, LayoutDashboard, LogOut, Menu as MenuIcon, Music, Package, Palette,
-  ReceiptText, ShieldCheck, Store, Users, UtensilsCrossed, X, MessagesSquare,
+  ReceiptText, ShieldCheck, Store, Users, UtensilsCrossed, X, MessagesSquare, HardDrive, Eraser,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { backendConfigured, createAdminClient } from '../lib/supabase';
@@ -17,6 +17,8 @@ import { Dishes } from './Dishes';
 import { Bulk } from './sections/Bulk';
 import { Leads } from './Leads';
 import { NotificationsPage } from './sections/NotificationsPage';
+import { MediaLibrary } from './sections/MediaLibrary';
+import { DataCleanup } from './sections/DataCleanup';
 import { Analytics } from './sections/Analytics';
 import { Appearance } from './sections/Appearance';
 import { MusicAnimations } from './sections/MusicAnimations';
@@ -33,12 +35,14 @@ const SECTIONS = [
   { id: 'offers', label: 'Coupons & Discounts', icon: BadgePercent, el: <Offers /> },
   { id: 'menu', label: 'Menu Management', icon: UtensilsCrossed, el: <Dishes /> },
   { id: 'chat', label: 'Live Chat', icon: MessagesSquare, el: <LiveChat /> },
-  { id: 'bulk', label: 'Bulk Orders', icon: Package, el: <Bulk /> },
+  { id: 'bulk', label: 'Bulk & Special Orders', icon: Package, el: <Bulk /> },
   { id: 'leads', label: 'Enquiries & Leads', icon: Inbox, el: <Leads /> },
   { id: 'notifications', label: 'Notifications', icon: Bell, el: <NotificationsPage /> },
   { id: 'analytics', label: 'Business Analytics', icon: ChartColumn, el: <Analytics /> },
   { id: 'appearance', label: 'Website Appearance', icon: Palette, el: <Appearance /> },
   { id: 'media', label: 'Music & Animations', icon: Music, el: <MusicAnimations /> },
+  { id: 'files', label: 'Media & Storage', icon: HardDrive, el: <MediaLibrary /> },
+  { id: 'cleanup', label: 'Data Cleanup', icon: Eraser, el: <DataCleanup /> },
   { id: 'settings', label: 'Restaurant Settings', icon: Store, el: <RestaurantSettingsPage /> },
   { id: 'account', label: 'Account & Security', icon: ShieldCheck, el: <Account /> },
 ] as const;
@@ -124,6 +128,15 @@ function Shell({ sb, session }: { sb: SupabaseClient; session: Session }) {
     const t = window.setTimeout(() => setToast(null), 4500);
     return () => window.clearTimeout(t);
   }, [toast]);
+  // automatic clean-up (only if the owner switched it on; the database runs it at most once a day)
+  useEffect(() => {
+    void sb.rpc('admin_cleanup_auto').then(({ data, error }) => {
+      if (error || !data) return;
+      const r = data as Record<string, number>;
+      const n = ['orders', 'leads', 'notifications', 'chats', 'coupons'].reduce((a, k) => a + (Number(r[k]) || 0), 0);
+      if (n) setToast({ id: Date.now(), text: `Automatic clean-up removed ${n} old record(s). See Data Cleanup.`, kind: 'ok' });
+    });
+  }, [sb]);
 
   const go = useCallback((s: string) => {
     location.hash = s;
@@ -185,7 +198,7 @@ function Sidebar({ section, go, open, onClose, email, onSignOut }: { section: Se
     <nav aria-label="Admin sections" className="flex h-full flex-col">
       <div className="flex items-center justify-between gap-2 px-4 pb-4 pt-5">
         <div className="flex items-center gap-3">
-          <img src="assets/images/logo-256.png" alt="" className="h-10 w-10 rounded-full" />
+          <img src="assets/images/logo-256.webp" alt="" className="h-10 w-10 rounded-full" />
           <div>
             <p className="font-display text-base leading-tight">Dawat Biryani</p>
             <p className="text-[10px] uppercase tracking-[0.2em] text-gold">Management</p>
@@ -250,7 +263,7 @@ function Login({ sb }: { sb: SupabaseClient }) {
   };
   return (
     <form onSubmit={submit} className="space-y-4 rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-      <img src="assets/images/logo-256.png" alt="" className="h-14 w-14 rounded-full" />
+      <img src="assets/images/logo-256.webp" alt="" className="h-14 w-14 rounded-full" />
       <h1 className="font-display text-2xl">Admin login</h1>
       <Field label="Email"><Input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
       <Field label="Password"><Input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></Field>

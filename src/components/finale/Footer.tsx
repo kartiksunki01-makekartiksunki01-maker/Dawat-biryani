@@ -12,7 +12,7 @@ export function Footer() {
       <div className="mx-auto grid max-w-[1400px] gap-12 px-5 sm:px-8 md:grid-cols-[1.3fr_1fr_1fr] lg:px-14">
         <div>
           <div className="flex items-center gap-4">
-            <img src={asset('assets/images/logo-256.png')} alt="" className="h-16 w-16" />
+            <img src={asset('assets/images/logo-256.webp')} alt="" className="h-16 w-16" />
             <div>
               <p className="font-display text-2xl text-ivory">{restaurant.name}</p>
               <p className="t-eyebrow mt-1 text-gold">{restaurant.tagline}</p>

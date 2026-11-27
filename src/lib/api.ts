@@ -7,6 +7,10 @@ export interface Issue {
   message: string;
   variant_id?: string;
   new_price?: number;
+  /** bulk enquiries */
+  bulk_id?: string;
+  name?: string;
+  old_price?: number;
 }
 
 export type ApiErrorKind =
@@ -149,6 +153,35 @@ export const placeOrder = async (req: OrderRequest) => num(await rpc<OrderJSON>(
 export const getOrder = async (id: string, token: string) => num(await rpc<OrderJSON>('get_order', { p_order_id: id, p_token: token }));
 export const submitEnquiry = (p: { kind: 'bulk' | 'contact'; name: string; phone: string; message: string; payload?: Record<string, unknown> }) =>
   rpc<{ id: string; created_at: string }>('submit_enquiry', { p });
+
+export interface BulkEnquiryRequest {
+  idempotency_key: string;
+  name: string;
+  phone: string;
+  items: { id: string; kg: number }[];
+  /** prices per kg the customer saw — only used to tell them if a price changed */
+  seen_prices: Record<string, number>;
+  event_type: string;
+  date: string;
+  time: string;
+  mode: 'pickup' | 'delivery';
+  instructions: string;
+  consent: boolean;
+}
+export interface BulkEnquiryResult {
+  id: string;
+  created_at: string;
+  duplicate: boolean;
+  total_kg: number;
+  estimated_total: number;
+  items: { id: string; name: string; kg: number; price_per_kg: number; subtotal: number }[];
+}
+/** Multi-dish bulk enquiry. The database prices it from its own menu; the result is an enquiry, not an order. */
+export const submitBulkEnquiry = async (p: BulkEnquiryRequest) => {
+  const r = await rpc<BulkEnquiryResult>('submit_bulk_enquiry', { p }, 20000);
+  return { ...r, total_kg: Number(r.total_kg), estimated_total: Number(r.estimated_total),
+    items: (r.items ?? []).map((i) => ({ ...i, kg: Number(i.kg), price_per_kg: Number(i.price_per_kg), subtotal: Number(i.subtotal) })) };
+};
 
 /** Cryptographically random secrets generated in the customer's browser. */
 export const newOrderSecrets = () => {

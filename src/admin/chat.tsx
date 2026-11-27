@@ -52,14 +52,15 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, kick)
       .subscribe((st) => { liveRef.current = st === 'SUBSCRIBED'; setLive(liveRef.current); });
     let ticks = 0;
+    // every 8 s only while live push is down; every 2 min as a safety net while it works
     const poll = window.setInterval(() => {
       ticks += 1;
-      if (document.visibilityState === 'visible' && (!liveRef.current || ticks % 4 === 0)) void reload();
+      if (document.visibilityState === 'visible' && (!liveRef.current || ticks % 15 === 0)) void reload();
     }, 8000);
-    // presence: the website shows "Online" only while this panel has pinged in the last 5 minutes
+    // presence: the website shows "Online" only while this panel has pinged in the last 5 minutes (ping every 2 min)
     const beat = () => { if (document.visibilityState === 'visible') void sb.rpc('admin_chat_heartbeat'); };
     beat();
-    const hb = window.setInterval(beat, 60000);
+    const hb = window.setInterval(beat, 120000);
     return () => { window.clearTimeout(debounce); window.clearInterval(poll); window.clearInterval(hb); void sb.removeChannel(ch); };
   }, [sb, reload]);
 
