@@ -27,9 +27,27 @@ Bill number (jaise `DBH-20261124-0001`) apne aap banta hai, kabhi repeat nahi ho
 - Galat/expired coupon customer ko reason ke saath mana ho jata hai.
 - Jo offer use ho chuka hai wo delete nahi hota — archive karo.
 
-## Bulk Orders
-- Enquiry aati hai → customer ko call/WhatsApp karo → **Quotation (₹)** likho → **Save quote**.
-- Customer maan gaya → **Convert to order** → bill number banega + ek private link milega. Wo link customer ko bhejo.
+## Bulk & Special Orders
+Is section mein do tab hain:
+
+**1. Bulk Menu & Pricing** (per-kg bulk menu — regular plate prices se bilkul alag)
+- Har dish ka **₹/kg**, category, veg/non-veg, photo, min/max kg aur advance notice yahin se badlo → **Edit** → **Save changes**. Naya price turant nayi enquiries par lagta hai; purani enquiries aur bills apne purane price par rehte hain.
+- **On website** switch = dish website par dikhe ya chhupe. **Sold out** = dikhegi par order nahi hogi.
+- Photo: list mein photo par tap karo (camera patti) → photo chuno → turant save. Jis dish ki photo nahi hai, website par “photo coming soon” dikhta hai — kisi doosri dish ki photo kabhi nahi.
+- **Add bulk dish** → naam, category, ₹/kg → dish chhupi hui banti hai → photo/rules bharo → “Show on website” on karo.
+- Upar ka **Maximum total per online enquiry** (abhi 20 kg) = customer ek enquiry mein kul kitne kg tak online bhej sakta hai.
+- **Apply one rule to every bulk dish** = sab dishes par ek saath min/max kg aur notice ka rule.
+- ↑ ↓ = website par order badlo. **Archive** = hata do (record rehta hai, “Archived” filter se wapas la sakte ho).
+- Gold “Note” = sirf aapke liye private note. Abhi teen dishes par confirm karne wali baat likhi hai:
+  - **Chicken Malai Tikka Biryani**: ₹1,400 per kg WhatsApp screenshot se padha gaya tha. Unit confirm karo, tab “On website” on karo (abhi chhupi hai).
+  - **Prawns Biryani**, **Chicken Sukha Lapeta**: spelling confirm karo.
+
+**2. Bulk Order Enquiries**
+- Har enquiry mein dish-wise kg, us waqt ka ₹/kg, total kg, estimate, event, date/time, pickup/delivery aur instructions dikhte hain.
+- Customer ko **Call / WhatsApp** karo → **Final quotation (₹)** likho (ya **Use estimate**) → **Save quote** → **Confirm quotation**.
+- Customer maan gaya → **Convert to order** → bill number + receipt banega + ek private link milega. Wo link customer ko bhejo. Ek enquiry sirf ek baar order banti hai.
+- Mana karna ho → **Reject…** (rejected enquiry order nahi ban sakti, jab tak status wapas na badlo).
+- Notes: ⋮ → “Show message & notes”. **Export CSV** = har dish ki alag line.
 
 ## Customers
 - Sab orders se apne aap banta hai. ⋮ se: history, notes, archive, ya **Delete personal data** (naam/phone hat jata hai, bills aur amount rehte hain).

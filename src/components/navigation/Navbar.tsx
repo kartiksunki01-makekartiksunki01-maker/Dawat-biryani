@@ -18,7 +18,7 @@ export const NAV_LINKS = [
   { id: 'our-story', label: 'Our Story' },
   { id: 'menu', label: 'Signature Menu' },
   { id: 'dum-experience', label: 'The Dum Experience' },
-  { id: 'bulk-orders', label: 'Bulk Orders' },
+  { id: 'bulk-orders', label: 'Bulk & Special Orders' },
   { id: 'gallery', label: 'Gallery' },
   { id: 'reviews', label: 'Reviews' },
   { id: 'visit', label: 'Visit Us' },

@@ -1,4 +1,5 @@
 import {
+  animate,
   motion,
   useInView,
   useReducedMotion,
@@ -7,9 +8,47 @@ import {
   useTransform,
   type HTMLMotionProps,
 } from 'framer-motion';
-import { useRef, type ElementType, type PointerEvent, type ReactNode } from 'react';
+import { useEffect, useRef, type ElementType, type PointerEvent, type ReactNode } from 'react';
 
 const ease = [0.22, 1, 0.36, 1] as const;
+
+/**
+ * Number that glides to its new value (≈0.35 s). Screen readers get the final value only; reduced motion snaps.
+ * The visible digits are written straight to the DOM so React never fights the animation.
+ */
+export function CountUp({ value, format, className = '', label }: { value: number; format: (n: number) => string; className?: string; label?: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const shown = useRef(value);
+  const reduced = useReducedMotion();
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (reduced || shown.current === value) {
+      el.textContent = format(value);
+      shown.current = value;
+      return;
+    }
+    const c = animate(shown.current, value, {
+      duration: 0.35,
+      ease,
+      onUpdate: (v) => {
+        shown.current = v;
+        el.textContent = format(Math.round(v));
+      },
+      onComplete: () => {
+        shown.current = value;
+        el.textContent = format(value);
+      },
+    });
+    return () => c.stop();
+  }, [value, format, reduced]);
+  return (
+    <span className={className}>
+      <span ref={ref} aria-hidden data-countup={value} />
+      <span className="sr-only">{label ? `${label} ` : ''}{format(value)}</span>
+    </span>
+  );
+}
 
 /** Staggered word-by-word masked heading reveal. */
 export function SplitReveal({

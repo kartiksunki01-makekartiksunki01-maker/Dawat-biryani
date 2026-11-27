@@ -33,7 +33,7 @@ const SECTIONS = [
   { id: 'offers', label: 'Coupons & Discounts', icon: BadgePercent, el: <Offers /> },
   { id: 'menu', label: 'Menu Management', icon: UtensilsCrossed, el: <Dishes /> },
   { id: 'chat', label: 'Live Chat', icon: MessagesSquare, el: <LiveChat /> },
-  { id: 'bulk', label: 'Bulk Orders', icon: Package, el: <Bulk /> },
+  { id: 'bulk', label: 'Bulk & Special Orders', icon: Package, el: <Bulk /> },
   { id: 'leads', label: 'Enquiries & Leads', icon: Inbox, el: <Leads /> },
   { id: 'notifications', label: 'Notifications', icon: Bell, el: <NotificationsPage /> },
   { id: 'analytics', label: 'Business Analytics', icon: ChartColumn, el: <Analytics /> },

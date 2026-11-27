@@ -81,6 +81,41 @@ export function buildBulkMessage(b: BulkEnquiry): string {
   ].join('\n');
 }
 
+const rsIN = (n: number) => `Rs. ${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(n)}`; // WhatsApp-safe, Indian grouping
+
+export interface BulkOrderDetails {
+  eventType: string;
+  date: string;
+  time: string;
+  name: string;
+  phone: string;
+  mode: 'pickup' | 'delivery';
+  instructions: string;
+}
+
+/** Multi-dish bulk enquiry text for WhatsApp / copy — every line with kg × price per kg, totals marked as estimates. */
+export function buildBulkOrderMessage(lines: { name: string; kg: number; pricePerKg: number }[], d: BulkOrderDetails): string {
+  const kg = lines.reduce((a, l) => a + l.kg, 0);
+  const total = lines.reduce((a, l) => a + l.kg * l.pricePerKg, 0);
+  return [
+    `${restaurant.name.toUpperCase()} — BULK & SPECIAL ORDER ENQUIRY`,
+    '',
+    ...lines.map((l, i) => `${i + 1}. ${l.name}: ${l.kg} kg x ${rsIN(l.pricePerKg)}/kg = ${rsIN(l.kg * l.pricePerKg)}`),
+    '',
+    `Total Quantity: ${kg} kg`,
+    `Estimated Total: ${rsIN(total)} (estimate — final price to be confirmed by the restaurant)`,
+    '',
+    `Customer Name: ${d.name.trim() || '—'}`,
+    `Contact Number: ${d.phone.trim() || '—'}`,
+    `Event Type: ${d.eventType}`,
+    `Preferred Date and Time: ${[fmtDate(d.date), fmtTime(d.time)].filter(Boolean).join(', ') || 'To be discussed'}`,
+    `Pickup or Delivery Preference: ${d.mode === 'pickup' ? 'Pickup' : 'Delivery (if available)'}`,
+    `Special Instructions: ${d.instructions.trim() || 'None'}`,
+    '',
+    'Please confirm availability and share the final quotation.',
+  ].join('\n');
+}
+
 /** WhatsApp number: admin setting when loaded, otherwise the built-in one. Digits only, country code first. */
 export const waNumber = () => {
   const n = useStorefront.getState().restaurant?.whatsapp_number ?? restaurant.whatsapp.number;

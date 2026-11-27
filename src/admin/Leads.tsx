@@ -11,15 +11,15 @@ export interface Lead {
   phone: string | null;
   message: string | null;
   payload: Record<string, unknown>;
-  status: 'new' | 'contacted' | 'confirmed' | 'closed';
+  status: 'new' | 'contacted' | 'confirmed' | 'rejected' | 'closed';
   notes: string | null;
   quote_amount: number | null;
   archived_at: string | null;
   converted_order_id: string | null;
   created_at: string;
 }
-export const LEAD_STATUSES: Lead['status'][] = ['new', 'contacted', 'confirmed', 'closed'];
-const KIND_LABEL: Record<Lead['kind'], string> = { cart: 'Order enquiry (old site)', bulk: 'Bulk order', contact: 'Contact' };
+export const LEAD_STATUSES: Lead['status'][] = ['new', 'contacted', 'confirmed', 'rejected', 'closed'];
+const KIND_LABEL: Record<Lead['kind'], string> = { cart: 'Order enquiry (old site)', bulk: 'Bulk & special order', contact: 'Contact' };
 
 export function useLeads(kinds: Lead['kind'][]) {
   const { sb, toast } = useAdmin();

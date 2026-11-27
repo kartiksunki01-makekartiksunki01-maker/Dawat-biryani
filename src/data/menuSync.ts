@@ -7,6 +7,7 @@ import { create } from 'zustand';
 import { publicClient, backendConfigured } from '../lib/supabase';
 import { menu } from './restaurant';
 import type { CategoryId, MenuItem } from './types';
+import { toBulkMenu, type BulkMenu, type BulkPayload } from './bulk';
 
 const CACHE_KEY = 'dawat-storefront-v2';
 
@@ -86,6 +87,8 @@ interface StorefrontPayload {
   offers: PublicOffer[];
   restaurant: RestaurantSettings | null;
   website: WebsiteSettings | null;
+  /** V3.6 per-kilogram Bulk & Special Orders menu (absent from older cached copies) */
+  bulk?: BulkPayload | null;
 }
 
 export type MenuSource = 'static' | 'cache' | 'live';
@@ -97,6 +100,8 @@ interface StorefrontState {
   offers: PublicOffer[];
   restaurant: RestaurantSettings | null;
   website: WebsiteSettings | null;
+  /** Bulk & Special Orders menu from the database (null until loaded — the section then uses its built-in copy). */
+  bulk: BulkMenu | null;
   /** Clock offset (server − browser) in ms, so "open now" uses the server's time. */
   clockSkewMs: number;
   loadError: boolean;
@@ -108,6 +113,7 @@ export const useStorefront = create<StorefrontState>(() => ({
   offers: [],
   restaurant: null,
   website: null,
+  bulk: null,
   clockSkewMs: 0,
   loadError: false,
 }));
@@ -155,6 +161,7 @@ function apply(p: StorefrontPayload, source: MenuSource) {
           free_delivery_above: p.restaurant.free_delivery_above == null ? null : Number(p.restaurant.free_delivery_above) }
       : null,
     website: p.website ? { ...p.website, music_volume: Number(p.website.music_volume) } : null,
+    bulk: toBulkMenu(p.bulk),
     clockSkewMs: source === 'live' && p.server_time ? new Date(p.server_time).getTime() - Date.now() : s.clockSkewMs,
     loadError: false,
   }));
